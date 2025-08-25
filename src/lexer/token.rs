@@ -110,11 +110,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Comma => "COMMA",
             TokenKind::Semicolon => "SEMICOLON",
 
-            TokenKind::LineComment => "LINE_COMMENT",
-            TokenKind::MultilineComment => "MULTILINE_COMMENT",
-
-            TokenKind::Whitespace => "WHITESPACE",
-            TokenKind::Newline => "NEWLINE",
+            _ => { unreachable!() }
         };
         write!(f, "{}", name)
     }
