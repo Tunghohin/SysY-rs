@@ -7,15 +7,15 @@ LINE_COMMENT = { "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
 MULTILINE_COMMENT = { "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 WHITESPACE = _{ " " | "\t" | NEWLINE | LINE_COMMENT | MULTILINE_COMMENT }
 
-CONST    = { "const" ~ (!ASCII_ALPHANUMERIC) }
-INT      = { "int" ~ (!ASCII_ALPHANUMERIC) }
-VOID     = { "void" ~ (!ASCII_ALPHANUMERIC) }
-IF       = { "if" ~ (!ASCII_ALPHANUMERIC) }
-ELSE     = { "else" ~ (!ASCII_ALPHANUMERIC) }
-WHILE    = { "while" ~ (!ASCII_ALPHANUMERIC) }
-BREAK    = { "break" ~ (!ASCII_ALPHANUMERIC) }
-CONTINUE = { "continue" ~ (!ASCII_ALPHANUMERIC) }
-RETURN   = { "return" ~ (!ASCII_ALPHANUMERIC) }
+CONST    = { "const" }
+INT      = { "int" }
+VOID     = { "void" }
+IF       = { "if" }
+ELSE     = { "else" }
+WHILE    = { "while" }
+BREAK    = { "break" }
+CONTINUE = { "continue" }
+RETURN   = { "return" }
 
 IDENT = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
