@@ -1,0 +1,10 @@
+[package]
+name = "compiler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pest = "2.5.0"
+pest_derive = "2.5.0"
+llvm-sys = "140.1.3"
+anyhow = "1.0.99"

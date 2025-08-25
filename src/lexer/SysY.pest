@@ -1,0 +1,72 @@
+// NEWLINE    = _{ "\r\n" | "\n" }
+// WHITESPACE = _{ " " | "\t" | NEWLINE }
+// LINE_COMMENT       = _{ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
+// MULTILINE_COMMENT  = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+NEWLINE = { "\r\n" | "\n" }
+WHITESPACE = _{ " " | "\t" | NEWLINE | LINE_COMMENT | MULTILINE_COMMENT }
+LINE_COMMENT = { "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
+MULTILINE_COMMENT = { "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+
+CONST      = { "const"}
+INT        = { "int" }
+VOID       = { "void" }
+IF         = { "if" }
+ELSE       = { "else" }
+WHILE      = { "while" }
+BREAK      = { "break" }
+CONTINUE   = { "continue" }
+RETURN     = { "return" }
+
+IDENT      = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+PLUS       = { "+" }
+MINUS      = { "-" }
+MUL        = { "*" }
+DIV        = { "/" }
+MOD        = { "%" }
+ASSIGN     = { "=" }
+EQ         = { "==" }
+NEQ        = { "!=" }
+LT         = { "<" }
+GT         = { ">" }
+LE         = { "<=" }
+GE         = { ">=" }
+NOT        = { "!" }
+AND        = { "&&" }
+OR         = { "||" }
+L_PAREN    = { "(" }
+R_PAREN    = { ")" }
+L_BRACE    = { "{" }
+R_BRACE    = { "}" }
+L_BRACKT   = { "[" }
+R_BRACKT   = { "]" }
+COMMA      = { "," }
+SEMICOLON  = { ";" }
+
+INTEGER_CONST = @{
+    "0x" ~ ASCII_HEX_DIGIT+ |
+    "0X" ~ ASCII_HEX_DIGIT+ |
+    "0"  ~ ASCII_OCT_DIGIT* |
+    ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*
+}
+
+comment = _{LINE_COMMENT | MULTILINE_COMMENT}
+keyword = _{ CONST | INT | VOID | IF | ELSE | WHILE | BREAK | CONTINUE | RETURN }
+operator = _{ EQ | NEQ | LE | GE | AND | OR | ASSIGN | MUL | DIV | PLUS | MINUS | MOD | LT | GT | NOT }
+token = _{
+    comment
+    | keyword
+    | operator
+    | L_PAREN
+    | R_PAREN
+    | L_BRACE
+    | R_BRACE
+    | L_BRACKT
+    | R_BRACKT
+    | COMMA
+    | SEMICOLON
+    | IDENT
+    | INTEGER_CONST
+}
+
+program = { SOI ~ (token)* ~ EOI }
