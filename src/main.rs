@@ -15,8 +15,10 @@ fn main() {
         .expect("Failed to read file");
 
     lexer::tokenize(&input)
-        .unwrap_or_else(|e| {
-            eprintln!("{}", e);
+        .unwrap_or_else(|errs| {
+            errs.iter().for_each(| err | {
+                eprintln!("{}", err);
+            });
             vec![]
         })
         .iter()
