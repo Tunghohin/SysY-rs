@@ -9,11 +9,12 @@ use pest_derive::Parser;
 pub(crate) struct SysYParser;
 
 pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
-    let mut pos: usize = 0;
+    let mut pos_offset: usize = 0;
+    let mut line_offset = 0;
     let mut errors = Vec::new();
     let mut tokens = Vec::new();
-    while pos < input.len() {
-        let remaining = &input[pos..];
+    while pos_offset < input.len() {
+        let remaining = &input[pos_offset..];
         match SysYParser::parse(Rule::program, remaining) {
             Ok(mut pairs) => {
                 pairs
@@ -103,9 +104,10 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                         errors.push(
                             format!(
                                 "Error type A at Line {}: Mysterious character \"{}\".",
-                                line, literal
+                                line + line_offset, literal
                             )
                         );
+                        line_offset += line - 1;
                     }
                     LineColLocation::Span((start_line, start_col), (end_line, end_col)) => {
                         let literal = matches!(e.variant, ErrorVariant::ParsingError { .. })
@@ -116,19 +118,20 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                             .unwrap_or("");
                         errors.push(format!(
                             "Error type B from line {}, column {} to line {}, column {}, near '{}'",
-                            start_line, start_col, end_line, end_col, literal
+                            start_line, start_col, end_line + line_offset, end_col, literal
                         ));
+                        line_offset += end_line - 1;
                     }
                 }
                 match e.location {
                     InputLocation::Pos(error_pos) => {
-                        pos += error_pos + 1;
+                        pos_offset += error_pos + 1;
                     }
                     InputLocation::Span((_start, end)) => {
-                        pos += end;
+                        pos_offset += end;
                     }
                 }
-                if pos >= input.len() {
+                if pos_offset >= input.len() {
                     break;
                 }
             }
