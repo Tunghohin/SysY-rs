@@ -3,6 +3,7 @@ pub mod token;
 use anyhow::Result;
 use pest::{Parser, error::ErrorVariant, error::InputLocation, error::LineColLocation};
 use pest_derive::Parser;
+use std::{fs, slice::RSplit};
 
 #[derive(Parser)]
 #[grammar = "./lexer/SysY.pest"]
@@ -95,9 +96,9 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                     LineColLocation::Pos((line, _col)) => {
                         let literal = matches!(e.variant, ErrorVariant::ParsingError { .. })
                             .then(|| match e.location {
-                                InputLocation::Pos(pos) => input.get(pos..pos + 1).unwrap_or(""),
+                                InputLocation::Pos(pos) => remaining.get(pos..pos + 1).unwrap_or(""),
                                 InputLocation::Span((start, end)) => {
-                                    input.get(start..end).unwrap_or("")
+                                    remaining.get(start..end).unwrap_or("")
                                 }
                             })
                             .unwrap_or("");
@@ -111,9 +112,9 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                     LineColLocation::Span((start_line, start_col), (end_line, end_col)) => {
                         let literal = matches!(e.variant, ErrorVariant::ParsingError { .. })
                             .then(|| match e.location {
-                                InputLocation::Pos(pos) => input.get(pos..pos + 1).unwrap_or(""),
+                                InputLocation::Pos(pos) => remaining.get(pos..pos + 1).unwrap_or(""),
                                 InputLocation::Span((start, end)) => {
-                                    input.get(start..end).unwrap_or("")
+                                    remaining.get(start..end).unwrap_or("")
                                 }
                             })
                             .unwrap_or("");
@@ -147,5 +148,49 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
         Ok(tokens)
     } else {
         Err(errors)
+    }
+}
+
+#[test]
+fn test_lexer() {
+    let case_dir = std::path::Path::new("./tests/lexer");
+
+    let mut entries: Vec<_> = fs::read_dir(case_dir)
+        .unwrap_or_else(|_| panic!("Failed to read dir"))
+        .map(|res| res.unwrap().path())
+        .filter(|path| path.extension().map(|e| e == "in").unwrap_or(false))
+        .collect();
+
+    entries.sort();
+
+    for entry in entries {
+        let mut out_buffer = String::new();
+        let input_path = entry.to_str().unwrap();
+        let solution_path = input_path.trim_end_matches(".in").to_string() + ".out";
+
+
+        let input = fs::read_to_string(input_path).expect("Failed to read file");
+        tokenize(&input)
+            .unwrap_or_else(|errs| {
+                errs.iter().for_each(|err| {
+                    out_buffer.push_str(&format!("{}\n", err));
+                });
+                vec![]
+            })
+            .iter()
+            .for_each(|token| match token.kind {
+                token::TokenKind::Eof => {}
+                _ => {
+                    out_buffer.push_str(&format!("{}\n", token));
+                }
+            });
+
+        let solution = fs::read_to_string(solution_path).unwrap_or_else(|_| {
+            panic!("Failed to read solution");
+        });
+        if out_buffer != solution {
+            panic!("Test failed for {}, expected: \n{}, found: \n{}", input_path, solution, out_buffer);
+        }
+        println!("{} passed.", input_path.rsplit('/').next().unwrap().trim_end_matches(".in"));
     }
 }

@@ -25,21 +25,3 @@ fn main() {
             }
         })
 }
-
-#[test]
-fn test_lexer() {
-    let case_dir = std::path::Path::new("./tests/lexer");
-
-    let mut entries: Vec<_> = fs::read_dir(case_dir)
-        .unwrap()
-        .map(|res| res.unwrap().path())
-        .filter(|path| path.extension().map(|e| e == "in").unwrap_or(false))
-        .collect();
-
-    entries.sort();
-
-    for entry in entries { 
-        let input = entry.as_path().to_str().unwrap();
-        println!("{}", input);
-    }
-}
