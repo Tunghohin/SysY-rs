@@ -81,14 +81,12 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                             // Default
                             _ => token::TokenKind::Unknown,
                         };
-                        tokens.push(
-                            token::Token {
-                                kind,
-                                lexeme,
-                                len: lexeme.len(),
-                                pos: (line, col),
-                            }
-                        );
+                        tokens.push(token::Token {
+                            kind,
+                            lexeme,
+                            len: lexeme.len(),
+                            pos: (line, col),
+                        });
                     });
                 break;
             }
@@ -98,27 +96,34 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                         let literal = matches!(e.variant, ErrorVariant::ParsingError { .. })
                             .then(|| match e.location {
                                 InputLocation::Pos(pos) => input.get(pos..pos + 1).unwrap_or(""),
-                                InputLocation::Span((start, end)) => input.get(start..end).unwrap_or(""),
+                                InputLocation::Span((start, end)) => {
+                                    input.get(start..end).unwrap_or("")
+                                }
                             })
                             .unwrap_or("");
-                        errors.push(
-                            format!(
-                                "Error type A at Line {}: Mysterious character \"{}\".",
-                                line + line_offset, literal
-                            )
-                        );
+                        errors.push(format!(
+                            "Error type A at Line {}: Mysterious character \"{}\".",
+                            line + line_offset,
+                            literal
+                        ));
                         line_offset += line - 1;
                     }
                     LineColLocation::Span((start_line, start_col), (end_line, end_col)) => {
                         let literal = matches!(e.variant, ErrorVariant::ParsingError { .. })
                             .then(|| match e.location {
                                 InputLocation::Pos(pos) => input.get(pos..pos + 1).unwrap_or(""),
-                                InputLocation::Span((start, end)) => input.get(start..end).unwrap_or(""),
+                                InputLocation::Span((start, end)) => {
+                                    input.get(start..end).unwrap_or("")
+                                }
                             })
                             .unwrap_or("");
                         errors.push(format!(
                             "Error type B from line {}, column {} to line {}, column {}, near '{}'",
-                            start_line, start_col, end_line + line_offset, end_col, literal
+                            start_line,
+                            start_col,
+                            end_line + line_offset,
+                            end_col,
+                            literal
                         ));
                         line_offset += end_line - 1;
                     }
@@ -137,7 +142,7 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
             }
         }
     }
-    
+
     if errors.is_empty() {
         Ok(tokens)
     } else {
