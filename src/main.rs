@@ -28,7 +28,7 @@ fn main() {
 
 #[test]
 fn test_lexer() {
-    let case_dir = std::path::Path::new("./lexer/tests");
+    let case_dir = std::path::Path::new("./tests/lexer");
 
     let mut entries: Vec<_> = fs::read_dir(case_dir)
         .unwrap()
@@ -38,7 +38,8 @@ fn test_lexer() {
 
     entries.sort();
 
-    for ent in entries {
-        println!("{}", ent.to_str().unwrap());
+    for entry in entries { 
+        let input = entry.as_path().to_str().unwrap();
+        println!("{}", input);
     }
 }
