@@ -1,21 +1,8 @@
-// NEWLINE    = _{ "\r\n" | "\n" }
-// WHITESPACE = _{ " " | "\t" | NEWLINE }
-// LINE_COMMENT       = _{ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE? }
-// MULTILINE_COMMENT  = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
-NEWLINE = { "\r\n" | "\n" }
-LINE_COMMENT = { "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
-MULTILINE_COMMENT = { "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+NEWLINE = _{ "\r\n" | "\n" }
+LINE_COMMENT = _{ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+MULTILINE_COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 WHITESPACE = _{ " " | "\t" | NEWLINE | LINE_COMMENT | MULTILINE_COMMENT }
 
-// CONST    = @{ "const" }
-// INT      = @{ "int" }
-// VOID     = @{ "void" }
-// IF       = @{ "if" }
-// ELSE     = @{ "else" }
-// WHILE    = @{ "while" }
-// BREAK    = @{ "break" }
-// CONTINUE = @{ "continue" }
-// RETURN   = @{ "return" }
 CONST    = @{ "const" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 INT      = @{ "int" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 VOID     = @{ "void" ~ !ASCII_ALPHANUMERIC ~ !"_" }
@@ -78,4 +65,4 @@ token    = _{
   | INTEGER_CONST
 }
 
-program = { SOI ~ (token)* ~ EOI }
+tokenize = { SOI ~ (token)* ~ EOI }
