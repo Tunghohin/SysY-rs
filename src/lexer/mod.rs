@@ -7,7 +7,7 @@ use std::{fs, slice::RSplit};
 
 #[derive(Parser)]
 #[grammar = "./rules.pest"]
-pub(crate) struct SysYParser;
+pub(crate) struct SysYLexer;
 
 pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
     let mut pos_offset: usize = 0;
@@ -16,7 +16,7 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
     let mut tokens = Vec::new();
     while pos_offset < input.len() {
         let remaining = &input[pos_offset..];
-        match SysYParser::parse(Rule::tokenize, remaining) {
+        match SysYLexer::parse(Rule::tokenize, remaining) {
             Ok(mut pairs) => {
                 pairs
                     .next()

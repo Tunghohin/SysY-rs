@@ -16,7 +16,7 @@ Break    = @{ "break" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 Continue = @{ "continue" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 Return   = @{ "return" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 
-Ident = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+Ident = @{ !KEYWORD ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 Plus      = { "+" }
 Minus     = { "-" }
@@ -125,10 +125,11 @@ TOKEN    = _{
 parse = { SOI ~ CompUnit ~ EOI }
 
 CompUnit = { (Decl | FuncDef)+ }
-BType = { Int }
+
 Decl = { ConstDecl | VarDecl }
 
 ConstDecl = { Const ~ BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon }
+BType = { Int }
 ConstDef = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ Assign ~ ConstInitVal }
 ConstInitVal = { ConstExp | LBrace ~ (ConstInitVal ~ (Comma ~ ConstInitVal)*)? ~ RBrace }
 
@@ -157,10 +158,10 @@ Stmt = { LVal ~ Assign ~ Exp ~ Semicolon
 Exp = { AddExp }
 Cond = { LOrExp }
 LVal = { Ident ~ (LBracket ~ Exp ~ RBracket)* }
-Number = { IntegerConst }
 PrimaryExp = { LParen ~ Exp ~ RParen | LVal | Number }
-UnaryOp = { Plus | Minus | Not }
+Number = { IntegerConst }
 UnaryExp = { PrimaryExp | UnaryOp ~ UnaryExp | Ident ~ LParen ~ (FuncRParams)? ~ RParen }
+UnaryOp = { Plus | Minus | Not }
 FuncRParams = { Exp ~ (Comma ~ Exp)* }
 MulExp = { UnaryExp ~ ((Mul | Div | Mod) ~ UnaryExp)* }
 AddExp = { MulExp ~ ((Plus | Minus) ~ MulExp)* }
