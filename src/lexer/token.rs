@@ -44,18 +44,10 @@ pub enum TokenKind {
     RParen,
     LBrace,
     RBrace,
-    LBrackt,
-    RBrackt,
+    LBracket,
+    RBracket,
     Comma,
     Semicolon,
-
-    // Comments
-    LineComment,
-    MultilineComment,
-
-    // Whitespace / newline (optional, depends if you want to track it)
-    Whitespace,
-    Newline,
 }
 
 #[derive(Debug)]
@@ -105,8 +97,8 @@ impl fmt::Display for TokenKind {
             TokenKind::RParen => "R_PAREN",
             TokenKind::LBrace => "L_BRACE",
             TokenKind::RBrace => "R_BRACE",
-            TokenKind::LBrackt => "L_BRACKT",
-            TokenKind::RBrackt => "R_BRACKT",
+            TokenKind::LBracket => "L_BRACKT",
+            TokenKind::RBracket => "R_BRACKT",
             TokenKind::Comma => "COMMA",
             TokenKind::Semicolon => "SEMICOLON",
 

@@ -27,60 +27,52 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                         let lexeme = pair.as_str();
                         let kind = match pair.as_rule() {
                             // Keywords
-                            Rule::CONST => token::TokenKind::Const,
-                            Rule::INT => token::TokenKind::Int,
-                            Rule::VOID => token::TokenKind::Void,
-                            Rule::IF => token::TokenKind::If,
-                            Rule::ELSE => token::TokenKind::Else,
-                            Rule::WHILE => token::TokenKind::While,
-                            Rule::BREAK => token::TokenKind::Break,
-                            Rule::CONTINUE => token::TokenKind::Continue,
-                            Rule::RETURN => token::TokenKind::Return,
-
+                            Rule::Const => token::TokenKind::Const,
+                            Rule::Int => token::TokenKind::Int,
+                            Rule::Void => token::TokenKind::Void,
+                            Rule::If => token::TokenKind::If,
+                            Rule::Else => token::TokenKind::Else,
+                            Rule::While => token::TokenKind::While,
+                            Rule::Break => token::TokenKind::Break,
+                            Rule::Continue => token::TokenKind::Continue,
+                            Rule::Return => token::TokenKind::Return,
+                            
                             // Identifiers and literals
-                            Rule::IDENT => token::TokenKind::Ident,
-                            Rule::INTEGER_CONST => token::TokenKind::IntegerConst,
-
+                            Rule::Ident => token::TokenKind::Ident,
+                            Rule::IntegerConst => token::TokenKind::IntegerConst,
+                            
                             // Operators
-                            Rule::PLUS => token::TokenKind::Plus,
-                            Rule::MINUS => token::TokenKind::Minus,
-                            Rule::MUL => token::TokenKind::Mul,
-                            Rule::DIV => token::TokenKind::Div,
-                            Rule::MOD => token::TokenKind::Mod,
-                            Rule::ASSIGN => token::TokenKind::Assign,
-                            Rule::EQ => token::TokenKind::Eq,
-                            Rule::NEQ => token::TokenKind::Neq,
-                            Rule::LT => token::TokenKind::Lt,
-                            Rule::GT => token::TokenKind::Gt,
-                            Rule::LE => token::TokenKind::Le,
-                            Rule::GE => token::TokenKind::Ge,
-                            Rule::NOT => token::TokenKind::Not,
-                            Rule::AND => token::TokenKind::And,
-                            Rule::OR => token::TokenKind::Or,
-
+                            Rule::Plus => token::TokenKind::Plus,
+                            Rule::Minus => token::TokenKind::Minus,
+                            Rule::Mul => token::TokenKind::Mul,
+                            Rule::Div => token::TokenKind::Div,
+                            Rule::Mod => token::TokenKind::Mod,
+                            Rule::Assign => token::TokenKind::Assign,
+                            Rule::Eq => token::TokenKind::Eq,
+                            Rule::Neq => token::TokenKind::Neq,
+                            Rule::Lt => token::TokenKind::Lt,
+                            Rule::Gt => token::TokenKind::Gt,
+                            Rule::Le => token::TokenKind::Le,
+                            Rule::Ge => token::TokenKind::Ge,
+                            Rule::Not => token::TokenKind::Not,
+                            Rule::And => token::TokenKind::And,
+                            Rule::Or => token::TokenKind::Or,
+                            
                             // Delimiters / punctuation
-                            Rule::L_PAREN => token::TokenKind::LParen,
-                            Rule::R_PAREN => token::TokenKind::RParen,
-                            Rule::L_BRACE => token::TokenKind::LBrace,
-                            Rule::R_BRACE => token::TokenKind::RBrace,
-                            Rule::L_BRACKT => token::TokenKind::LBrackt,
-                            Rule::R_BRACKT => token::TokenKind::RBrackt,
-                            Rule::COMMA => token::TokenKind::Comma,
-                            Rule::SEMICOLON => token::TokenKind::Semicolon,
-
-                            // Comments
-                            Rule::LINE_COMMENT => token::TokenKind::LineComment,
-                            Rule::MULTILINE_COMMENT => token::TokenKind::MultilineComment,
-
-                            // Whitespace
-                            Rule::WHITESPACE => token::TokenKind::Whitespace,
-                            Rule::NEWLINE => token::TokenKind::Newline,
-
+                            Rule::LParen => token::TokenKind::LParen,
+                            Rule::RParen => token::TokenKind::RParen,
+                            Rule::LBrace => token::TokenKind::LBrace,
+                            Rule::RBrace => token::TokenKind::RBrace,
+                            Rule::LBracket => token::TokenKind::LBracket,
+                            Rule::RBracket => token::TokenKind::RBracket,
+                            Rule::Comma => token::TokenKind::Comma,
+                            Rule::Semicolon => token::TokenKind::Semicolon,
+                            
                             // Eof
                             Rule::EOI => token::TokenKind::Eof,
-
+                            
                             // Default
-                            _ => token::TokenKind::Unknown,
+                            _ => token::TokenKind::Unknown,                            
                         };
                         tokens.push(token::Token {
                             kind,

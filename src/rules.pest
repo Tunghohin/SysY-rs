@@ -1,68 +1,177 @@
+// ============= Lexer for SysY =============
+tokenize = { SOI ~ (TOKEN)* ~ EOI }
+
 NEWLINE = _{ "\r\n" | "\n" }
 LINE_COMMENT = _{ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
 MULTILINE_COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 WHITESPACE = _{ " " | "\t" | NEWLINE | LINE_COMMENT | MULTILINE_COMMENT }
 
-CONST    = @{ "const" ~ !ASCII_ALPHANUMERIC ~ !"_" }
-INT      = @{ "int" ~ !ASCII_ALPHANUMERIC ~ !"_" }
-VOID     = @{ "void" ~ !ASCII_ALPHANUMERIC ~ !"_" }
-IF       = @{ "if" ~ !ASCII_ALPHANUMERIC ~ !"_" }
-ELSE     = @{ "else" ~ !ASCII_ALPHANUMERIC ~ !"_" }
-WHILE    = @{ "while" ~ !ASCII_ALPHANUMERIC ~ !"_" }
-BREAK    = @{ "break" ~ !ASCII_ALPHANUMERIC ~ !"_" }
-CONTINUE = @{ "continue" ~ !ASCII_ALPHANUMERIC ~ !"_" }
-RETURN   = @{ "return" ~ !ASCII_ALPHANUMERIC ~ !"_" }
+Const    = @{ "const" ~ !ASCII_ALPHANUMERIC ~ !"_" }
+Int      = @{ "int" ~ !ASCII_ALPHANUMERIC ~ !"_" }
+Void     = @{ "void" ~ !ASCII_ALPHANUMERIC ~ !"_" }
+If       = @{ "if" ~ !ASCII_ALPHANUMERIC ~ !"_" }
+Else     = @{ "else" ~ !ASCII_ALPHANUMERIC ~ !"_" }
+While    = @{ "while" ~ !ASCII_ALPHANUMERIC ~ !"_" }
+Break    = @{ "break" ~ !ASCII_ALPHANUMERIC ~ !"_" }
+Continue = @{ "continue" ~ !ASCII_ALPHANUMERIC ~ !"_" }
+Return   = @{ "return" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 
-IDENT = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+Ident = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
-PLUS      = { "+" }
-MINUS     = { "-" }
-MUL       = { "*" }
-DIV       = { "/" }
-MOD       = { "%" }
-ASSIGN    = { "=" }
-EQ        = { "==" }
-NEQ       = { "!=" }
-LT        = { "<" }
-GT        = { ">" }
-LE        = { "<=" }
-GE        = { ">=" }
-NOT       = { "!" }
-AND       = { "&&" }
-OR        = { "||" }
-L_PAREN   = { "(" }
-R_PAREN   = { ")" }
-L_BRACE   = { "{" }
-R_BRACE   = { "}" }
-L_BRACKT  = { "[" }
-R_BRACKT  = { "]" }
-COMMA     = { "," }
-SEMICOLON = { ";" }
+Plus      = { "+" }
+Minus     = { "-" }
+Mul       = { "*" }
+Div       = { "/" }
+Mod       = { "%" }
+Assign    = { "=" }
+Eq        = { "==" }
+Neq       = { "!=" }
+Lt        = { "<" }
+Gt        = { ">" }
+Le        = { "<=" }
+Ge        = { ">=" }
+Not       = { "!" }
+And       = { "&&" }
+Or        = { "||" }
+LParen    = { "(" }
+RParen    = { ")" }
+LBrace    = { "{" }
+RBrace    = { "}" }
+LBracket   = { "[" }
+RBracket   = { "]" }
+Comma     = { "," }
+Semicolon = { ";" }
 
-INTEGER_CONST = @{
+IntegerConst = @{
     "0x" ~ ASCII_HEX_DIGIT+
   | "0X" ~ ASCII_HEX_DIGIT+
   | "0" ~ ASCII_OCT_DIGIT*
   | ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*
 }
 
-comment  = _{ LINE_COMMENT | MULTILINE_COMMENT }
-keyword  = _{ CONST | INT | VOID | IF | ELSE | WHILE | BREAK | CONTINUE | RETURN }
-operator = _{ EQ | NEQ | LE | GE | AND | OR | ASSIGN | MUL | DIV | PLUS | MINUS | MOD | LT | GT | NOT }
-token    = _{
-    comment
-  | keyword
-  | IDENT
-  | operator
-  | L_PAREN
-  | R_PAREN
-  | L_BRACE
-  | R_BRACE
-  | L_BRACKT
-  | R_BRACKT
-  | COMMA
-  | SEMICOLON
-  | INTEGER_CONST
+COMMENT  = _{ LINE_COMMENT | MULTILINE_COMMENT }
+KEYWORD  = _{ Const | Int | Void | If | Else | While | Break | Continue | Return }
+OPERATOR = _{ Eq | Neq | Le | Ge | And | Or | Assign | Mul | Div | Plus | Minus | Mod | Lt | Gt | Not }
+TOKEN    = _{
+    COMMENT
+  | KEYWORD
+  | Ident
+  | OPERATOR
+  | LParen
+  | RParen
+  | LBrace
+  | RBrace
+  | LBracket
+  | RBracket
+  | Comma
+  | Semicolon
+  | IntegerConst
 }
 
-tokenize = { SOI ~ (token)* ~ EOI }
+// ============= Parser for SysY =============
+// parse = { SOI ~ CompUnit ~ EOI }
+
+// CompUnit = { (Decl | FuncDef)+ }
+
+// BType = { Int }
+// Decl = { ConstDecl | VarDecl }
+
+// ConstDecl = { Const ~ BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon }
+// ConstDef = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ Assign ~ ConstInitVal }
+// ConstInitVal = { ConstExp | LBrace ~ (ConstInitVal ~ (Comma ~ ConstInitVal)*)? ~ RBrace }
+
+// VarDecl = { BType ~ VarDef ~ (Comma ~ VarDef)* ~ Semicolon }
+// VarDef = {  Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ (Assign ~ InitVal)? }
+// InitVal = { Exp | LBrace ~ (InitVal ~ (Comma ~ InitVal)*)? ~ RBrace }
+
+// FuncDef = {  FuncType ~ Ident ~ LParen ~ (FuncFParams)? ~ RParen ~ Block }
+// FuncType = { Void | BType }
+// FuncFParams = { FuncFParam ~ (Comma ~ FuncFParam)* }
+// FuncFParam = { BType ~ Ident ~ (LBracket ~ RBracket ~ (LBracket ~ Exp ~ RBracket)*)? }
+
+// Block = { LBrace ~ (BlockItem)* ~ RBrace }
+// BlockItem = { Decl | Stmt }
+
+// Stmt = {  LVal ~ Assign ~ Exp ~ Semicolon
+//         | (Exp)? ~ Semicolon
+//         | Block
+//         | If ~ LParen ~ Cond ~ RParen ~ Stmt ~ (Else ~ Stmt)?
+//         | While ~ LParen ~ Cond ~ RParen ~ Stmt
+//         | Break ~ Semicolon
+//         | Continue ~ Semicolon
+//         | Return ~ (Exp)? ~ Semicolon
+//         }
+    
+// Exp = { AddExp }
+// Cond = { LOrExp }
+// LVal = { Ident ~ (LBracket ~ Exp ~ RBracket)* }
+// Number = { IntegerConst }
+
+// PrimaryExp = { LParen ~ Exp ~ RParen | LVal | Number }
+
+// UnaryOp = { Plus | Minus | Not }
+// UnaryExp = { PrimaryExp | UnaryOp ~ UnaryExp | Ident ~ LParen ~ (FuncRParams)? ~ RParen }
+
+// FuncRParams = { Exp ~ (Comma ~ Exp)* }
+// MulExp = { UnaryExp | MulExp ~ (Mul | Div | Mod) ~ UnaryExp }
+// AddExp = { MulExp | AddExp ~ (Plus | Minus) ~ MulExp }
+// RelExp = { AddExp | RelExp ~ (Lt | Gt | Le | Ge) ~ AddExp }
+// EqExp = { RelExp | EqExp ~ (Eq | Neq) ~ RelExp }
+// LAndExp = { EqExp | LAndExp ~ And ~ EqExp }
+// LOrExp = { LAndExp | LOrExp ~ Or ~ LAndExp }
+// ConstExp = { AddExp }
+
+// ============= Parser for SysY =============
+parse = { SOI ~ CompUnit ~ EOI }
+
+CompUnit = { (Decl | FuncDef)+ }
+BType = { Int }
+Decl = { ConstDecl | VarDecl }
+
+ConstDecl = { Const ~ BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon }
+ConstDef = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ Assign ~ ConstInitVal }
+ConstInitVal = { ConstExp | LBrace ~ (ConstInitVal ~ (Comma ~ ConstInitVal)*)? ~ RBrace }
+
+VarDecl = { BType ~ VarDef ~ (Comma ~ VarDef)* ~ Semicolon }
+VarDef = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ (Assign ~ InitVal)? }
+InitVal = { Exp | LBrace ~ (InitVal ~ (Comma ~ InitVal)*)? ~ RBrace }
+
+FuncDef = { FuncType ~ Ident ~ LParen ~ (FuncFParams)? ~ RParen ~ Block }
+FuncType = { Void | BType }
+FuncFParams = { FuncFParam ~ (Comma ~ FuncFParam)* }
+FuncFParam = { BType ~ Ident ~ (LBracket ~ RBracket ~ (LBracket ~ Exp ~ RBracket)*)? }
+
+Block = { LBrace ~ (BlockItem)* ~ RBrace }
+BlockItem = { Decl | Stmt }
+
+Stmt = { LVal ~ Assign ~ Exp ~ Semicolon
+        | (Exp)? ~ Semicolon
+        | Block
+        | If ~ LParen ~ Cond ~ RParen ~ Stmt ~ (Else ~ Stmt)?
+        | While ~ LParen ~ Cond ~ RParen ~ Stmt
+        | Break ~ Semicolon
+        | Continue ~ Semicolon
+        | Return ~ (Exp)? ~ Semicolon
+        }
+    
+Exp = { AddExp }
+Cond = { LOrExp }
+LVal = { Ident ~ (LBracket ~ Exp ~ RBracket)* }
+Number = { IntegerConst }
+PrimaryExp = { LParen ~ Exp ~ RParen | LVal | Number }
+UnaryOp = { Plus | Minus | Not }
+UnaryExp = { PrimaryExp | UnaryOp ~ UnaryExp | Ident ~ LParen ~ (FuncRParams)? ~ RParen }
+FuncRParams = { Exp ~ (Comma ~ Exp)* }
+MulExp = { UnaryExp ~ ((Mul | Div | Mod) ~ UnaryExp)* }
+AddExp = { MulExp ~ ((Plus | Minus) ~ MulExp)* }
+RelExp = { AddExp ~ ((Lt | Gt | Le | Ge) ~ AddExp)* }
+EqExp = { RelExp ~ ((Eq | Neq) ~ RelExp)* }
+LAndExp = { EqExp ~ (And ~ EqExp)* }
+LOrExp = { LAndExp ~ (Or ~ LAndExp)* }
+ConstExp = { AddExp }
+
+
+
+
+
+
