@@ -29,7 +29,12 @@ impl ASTBuilder {
 
     fn display_ast_inner(pair: pest::iterators::Pair<Rule>, prefix: String, is_last: bool) {
         let connector = if is_last { "└── " } else { "├── " };
-        println!("{}{}{:?}", prefix, connector, pair.as_rule());
+        if pair.as_rule() == Rule::Ident || pair.as_rule() == Rule::IntegerConst {
+            let lexeme = pair.as_str();
+            println!("{}{}{:?} <row: {}, col: {}> {}", prefix, connector, pair.as_rule(), pair.line_col().0, pair.line_col().1, lexeme);
+        } else {
+            println!("{}{}{:?}", prefix, connector, pair.as_rule());
+        }
 
         let mut inner = pair.into_inner().peekable();
         while let Some(p) = inner.next() {
@@ -57,7 +62,7 @@ pub fn parse(input: &str) -> Result<(), String> {
 
 #[test]
 fn test_parser() {
-    let src = std::fs::read_to_string("./tests/parser/sample2.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/parser/expr1.in").unwrap_or_default();
     parse(&src).unwrap_or_else(|e| {
         println!("{}", e);
         panic!()

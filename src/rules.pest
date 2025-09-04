@@ -1,10 +1,10 @@
 // ============= Lexer for SysY =============
 tokenize = { SOI ~ (TOKEN)* ~ EOI }
 
-NEWLINE = _{ "\r\n" | "\n" }
-LINE_COMMENT = _{ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+NEWLINE           = _{ "\r\n" | "\n" }
+LINE_COMMENT      = _{ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
 MULTILINE_COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
-WHITESPACE = _{ " " | "\t" | NEWLINE | LINE_COMMENT | MULTILINE_COMMENT }
+WHITESPACE        = _{ " " | "\t" | NEWLINE | LINE_COMMENT | MULTILINE_COMMENT }
 
 Const    = @{ "const" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 Int      = @{ "int" ~ !ASCII_ALPHANUMERIC ~ !"_" }
@@ -37,8 +37,8 @@ LParen    = { "(" }
 RParen    = { ")" }
 LBrace    = { "{" }
 RBrace    = { "}" }
-LBracket   = { "[" }
-RBracket   = { "]" }
+LBracket  = { "[" }
+RBracket  = { "]" }
 Comma     = { "," }
 Semicolon = { ";" }
 
@@ -69,59 +69,6 @@ TOKEN    = _{
 }
 
 // ============= Parser for SysY =============
-// parse = { SOI ~ CompUnit ~ EOI }
-
-// CompUnit = { (Decl | FuncDef)+ }
-
-// BType = { Int }
-// Decl = { ConstDecl | VarDecl }
-
-// ConstDecl = { Const ~ BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon }
-// ConstDef = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ Assign ~ ConstInitVal }
-// ConstInitVal = { ConstExp | LBrace ~ (ConstInitVal ~ (Comma ~ ConstInitVal)*)? ~ RBrace }
-
-// VarDecl = { BType ~ VarDef ~ (Comma ~ VarDef)* ~ Semicolon }
-// VarDef = {  Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ (Assign ~ InitVal)? }
-// InitVal = { Exp | LBrace ~ (InitVal ~ (Comma ~ InitVal)*)? ~ RBrace }
-
-// FuncDef = {  FuncType ~ Ident ~ LParen ~ (FuncFParams)? ~ RParen ~ Block }
-// FuncType = { Void | BType }
-// FuncFParams = { FuncFParam ~ (Comma ~ FuncFParam)* }
-// FuncFParam = { BType ~ Ident ~ (LBracket ~ RBracket ~ (LBracket ~ Exp ~ RBracket)*)? }
-
-// Block = { LBrace ~ (BlockItem)* ~ RBrace }
-// BlockItem = { Decl | Stmt }
-
-// Stmt = {  LVal ~ Assign ~ Exp ~ Semicolon
-//         | (Exp)? ~ Semicolon
-//         | Block
-//         | If ~ LParen ~ Cond ~ RParen ~ Stmt ~ (Else ~ Stmt)?
-//         | While ~ LParen ~ Cond ~ RParen ~ Stmt
-//         | Break ~ Semicolon
-//         | Continue ~ Semicolon
-//         | Return ~ (Exp)? ~ Semicolon
-//         }
-    
-// Exp = { AddExp }
-// Cond = { LOrExp }
-// LVal = { Ident ~ (LBracket ~ Exp ~ RBracket)* }
-// Number = { IntegerConst }
-
-// PrimaryExp = { LParen ~ Exp ~ RParen | LVal | Number }
-
-// UnaryOp = { Plus | Minus | Not }
-// UnaryExp = { PrimaryExp | UnaryOp ~ UnaryExp | Ident ~ LParen ~ (FuncRParams)? ~ RParen }
-
-// FuncRParams = { Exp ~ (Comma ~ Exp)* }
-// MulExp = { UnaryExp | MulExp ~ (Mul | Div | Mod) ~ UnaryExp }
-// AddExp = { MulExp | AddExp ~ (Plus | Minus) ~ MulExp }
-// RelExp = { AddExp | RelExp ~ (Lt | Gt | Le | Ge) ~ AddExp }
-// EqExp = { RelExp | EqExp ~ (Eq | Neq) ~ RelExp }
-// LAndExp = { EqExp | LAndExp ~ And ~ EqExp }
-// LOrExp = { LAndExp | LOrExp ~ Or ~ LAndExp }
-// ConstExp = { AddExp }
-
-// ============= Parser for SysY =============
 parse = { SOI ~ CompUnit ~ EOI }
 
 CompUnit = { (Decl | FuncDef)+ }
@@ -130,50 +77,45 @@ Decl = { ConstDecl | VarDecl }
 
 BType = { Int }
 
-ConstDecl = { Const ~ BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon }
-ConstDef = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ Assign ~ ConstInitVal }
+ConstDecl    = { Const ~ BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon }
+ConstDef     = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ Assign ~ ConstInitVal }
 ConstInitVal = { ConstExp | LBrace ~ (ConstInitVal ~ (Comma ~ ConstInitVal)*)? ~ RBrace }
 
 VarDecl = { BType ~ VarDef ~ (Comma ~ VarDef)* ~ Semicolon }
-VarDef = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ (Assign ~ InitVal)? }
+VarDef  = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ (Assign ~ InitVal)? }
 InitVal = { Exp | LBrace ~ (InitVal ~ (Comma ~ InitVal)*)? ~ RBrace }
 
-FuncDef = { FuncType ~ Ident ~ LParen ~ (FuncFParams)? ~ RParen ~ Block }
-FuncType = { Void | BType }
+FuncDef     = { FuncType ~ Ident ~ LParen ~ (FuncFParams)? ~ RParen ~ Block }
+FuncType    = { Void | BType }
 FuncFParams = { FuncFParam ~ (Comma ~ FuncFParam)* }
-FuncFParam = { BType ~ Ident ~ (LBracket ~ RBracket ~ (LBracket ~ Exp ~ RBracket)*)? }
+FuncFParam  = { BType ~ Ident ~ (LBracket ~ RBracket ~ (LBracket ~ Exp ~ RBracket)*)? }
 
-Block = { LBrace ~ (BlockItem)* ~ RBrace }
+Block     = { LBrace ~ (BlockItem)* ~ RBrace }
 BlockItem = { Decl | Stmt }
 
-Stmt = { LVal ~ Assign ~ Exp ~ Semicolon
-        | (Exp)? ~ Semicolon
-        | Block
-        | If ~ LParen ~ Cond ~ RParen ~ Stmt ~ (Else ~ Stmt)?
-        | While ~ LParen ~ Cond ~ RParen ~ Stmt
-        | Break ~ Semicolon
-        | Continue ~ Semicolon
-        | Return ~ (Exp)? ~ Semicolon
-        }
-    
-Exp = { AddExp }
-Cond = { LOrExp }
-LVal = { Ident ~ (LBracket ~ Exp ~ RBracket)* }
-PrimaryExp = { LParen ~ Exp ~ RParen | LVal | Number }
-Number = { IntegerConst }
-UnaryExp = { Ident ~ LParen ~ (FuncRParams)? ~ RParen | PrimaryExp | UnaryOp ~ UnaryExp }
-UnaryOp = { Plus | Minus | Not }
+Stmt = {
+    LVal ~ Assign ~ Exp ~ Semicolon
+  | (Exp)? ~ Semicolon
+  | Block
+  | If ~ LParen ~ Cond ~ RParen ~ Stmt ~ (Else ~ Stmt)?
+  | While ~ LParen ~ Cond ~ RParen ~ Stmt
+  | Break ~ Semicolon
+  | Continue ~ Semicolon
+  | Return ~ (Exp)? ~ Semicolon
+}
+
+Exp         = { AddExp }
+Cond        = { LOrExp }
+LVal        = { Ident ~ (LBracket ~ Exp ~ RBracket)* }
+PrimaryExp  = { LParen ~ Exp ~ RParen | LVal | Number }
+Number      = { IntegerConst }
+UnaryExp    = { Ident ~ LParen ~ (FuncRParams)? ~ RParen | PrimaryExp | UnaryOp ~ UnaryExp }
+UnaryOp     = { Plus | Minus | Not }
 FuncRParams = { Exp ~ (Comma ~ Exp)* }
-MulExp = { UnaryExp ~ ((Mul | Div | Mod) ~ UnaryExp)* }
-AddExp = { MulExp ~ ((Plus | Minus) ~ MulExp)* }
-RelExp = { AddExp ~ ((Lt | Gt | Le | Ge) ~ AddExp)* }
-EqExp = { RelExp ~ ((Eq | Neq) ~ RelExp)* }
-LAndExp = { EqExp ~ (And ~ EqExp)* }
-LOrExp = { LAndExp ~ (Or ~ LAndExp)* }
-ConstExp = { AddExp }
-
-
-
-
-
-
+MulExp      = { UnaryExp ~ ((Mul | Div | Mod) ~ UnaryExp)* }
+AddExp      = { MulExp ~ ((Plus | Minus) ~ MulExp)* }
+RelExp      = { AddExp ~ ((Lt | Gt | Le | Ge) ~ AddExp)* }
+EqExp       = { RelExp ~ ((Eq | Neq) ~ RelExp)* }
+LAndExp     = { EqExp ~ (And ~ EqExp)* }
+LOrExp      = { LAndExp ~ (Or ~ LAndExp)* }
+ConstExp    = { AddExp }
