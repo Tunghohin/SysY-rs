@@ -49,7 +49,6 @@ impl ASTBuilder {
     }
 
     fn display_ast(pair: pest::iterators::Pair<Rule>) {
-        println!("AST");
         ASTBuilder::display_ast_inner(pair, "".to_string(), true);
     }
 }
