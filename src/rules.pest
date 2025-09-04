@@ -128,8 +128,9 @@ CompUnit = { (Decl | FuncDef)+ }
 
 Decl = { ConstDecl | VarDecl }
 
-ConstDecl = { Const ~ BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon }
 BType = { Int }
+
+ConstDecl = { Const ~ BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon }
 ConstDef = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ Assign ~ ConstInitVal }
 ConstInitVal = { ConstExp | LBrace ~ (ConstInitVal ~ (Comma ~ ConstInitVal)*)? ~ RBrace }
 
@@ -160,7 +161,7 @@ Cond = { LOrExp }
 LVal = { Ident ~ (LBracket ~ Exp ~ RBracket)* }
 PrimaryExp = { LParen ~ Exp ~ RParen | LVal | Number }
 Number = { IntegerConst }
-UnaryExp = { PrimaryExp | Ident ~ LParen ~ (FuncRParams)? ~ RParen | UnaryOp ~ UnaryExp }
+UnaryExp = { Ident ~ LParen ~ (FuncRParams)? ~ RParen | PrimaryExp | UnaryOp ~ UnaryExp }
 UnaryOp = { Plus | Minus | Not }
 FuncRParams = { Exp ~ (Comma ~ Exp)* }
 MulExp = { UnaryExp ~ ((Mul | Div | Mod) ~ UnaryExp)* }
