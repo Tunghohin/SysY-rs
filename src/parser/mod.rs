@@ -34,6 +34,6 @@ pub fn parse(input: &str) -> Result<(), String> {
 
 #[test]
 fn test_parser() {
-    let src = std::fs::read_to_string("./tests/parser/sample1.in").unwrap_or_default();
-    parse(&src).unwrap_or_else(|e| { println!("!!!!!!!!!!!{}", e); panic!() });
+    let src = std::fs::read_to_string("./tests/parser/sample2.in").unwrap_or_default();
+    parse(&src).unwrap_or_else(|e| { println!("{}", e); panic!() });
 }
