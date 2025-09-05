@@ -1,5 +1,5 @@
 // ============= Lexer for SysY =============
-tokenize = { SOI ~ (TOKEN)* ~ EOI }
+tokens = { SOI ~ (TOKEN)* ~ EOI }
 
 NEWLINE           = _{ "\r\n" | "\n" }
 LINE_COMMENT      = _{ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
@@ -69,7 +69,7 @@ TOKEN    = _{
 }
 
 // ============= Parser for SysY =============
-parse = { SOI ~ CompUnit ~ EOI }
+prog = { SOI ~ CompUnit ~ EOI }
 
 CompUnit = { (Decl | FuncDef)+ }
 

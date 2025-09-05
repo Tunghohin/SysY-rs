@@ -16,7 +16,7 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
     let mut tokens = Vec::new();
     while pos_offset < input.len() {
         let remaining = &input[pos_offset..];
-        match SysYLexer::parse(Rule::tokenize, remaining) {
+        match SysYLexer::parse(Rule::tokens, remaining) {
             Ok(mut pairs) => {
                 pairs
                     .next()

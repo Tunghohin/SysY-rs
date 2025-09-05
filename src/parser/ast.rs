@@ -216,8 +216,8 @@ pub enum StmtType {
 
 #[derive(Debug)]
 pub enum ConstInitValType {
-    Exp(Box<AstNode>),
-    List(Vec<Box<AstNode>>),
+    ConstExp(Box<AstNode>),
+    InitList(Vec<Box<AstNode>>),
 }
 
 #[derive(Debug)]
