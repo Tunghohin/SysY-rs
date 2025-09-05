@@ -36,11 +36,11 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                             Rule::Break => token::TokenKind::Break,
                             Rule::Continue => token::TokenKind::Continue,
                             Rule::Return => token::TokenKind::Return,
-                            
+
                             // Identifiers and literals
                             Rule::Ident => token::TokenKind::Ident,
                             Rule::IntegerConst => token::TokenKind::IntegerConst,
-                            
+
                             // Operators
                             Rule::Plus => token::TokenKind::Plus,
                             Rule::Minus => token::TokenKind::Minus,
@@ -57,7 +57,7 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                             Rule::Not => token::TokenKind::Not,
                             Rule::And => token::TokenKind::And,
                             Rule::Or => token::TokenKind::Or,
-                            
+
                             // Delimiters / punctuation
                             Rule::LParen => token::TokenKind::LParen,
                             Rule::RParen => token::TokenKind::RParen,
@@ -67,12 +67,12 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                             Rule::RBracket => token::TokenKind::RBracket,
                             Rule::Comma => token::TokenKind::Comma,
                             Rule::Semicolon => token::TokenKind::Semicolon,
-                            
+
                             // Eof
                             Rule::EOI => token::TokenKind::Eof,
-                            
+
                             // Default
-                            _ => token::TokenKind::Unknown,                            
+                            _ => token::TokenKind::Unknown,
                         };
                         tokens.push(token::Token {
                             kind,
@@ -88,7 +88,9 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                     LineColLocation::Pos((line, _col)) => {
                         let literal = matches!(e.variant, ErrorVariant::ParsingError { .. })
                             .then(|| match e.location {
-                                InputLocation::Pos(pos) => remaining.get(pos..pos + 1).unwrap_or(""),
+                                InputLocation::Pos(pos) => {
+                                    remaining.get(pos..pos + 1).unwrap_or("")
+                                }
                                 InputLocation::Span((start, end)) => {
                                     remaining.get(start..end).unwrap_or("")
                                 }
@@ -104,7 +106,9 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                     LineColLocation::Span((start_line, start_col), (end_line, end_col)) => {
                         let literal = matches!(e.variant, ErrorVariant::ParsingError { .. })
                             .then(|| match e.location {
-                                InputLocation::Pos(pos) => remaining.get(pos..pos + 1).unwrap_or(""),
+                                InputLocation::Pos(pos) => {
+                                    remaining.get(pos..pos + 1).unwrap_or("")
+                                }
                                 InputLocation::Span((start, end)) => {
                                     remaining.get(start..end).unwrap_or("")
                                 }
@@ -160,7 +164,6 @@ fn test_lexer() {
         let input_path = entry.to_str().unwrap();
         let solution_path = input_path.trim_end_matches(".in").to_string() + ".out";
 
-
         let input = fs::read_to_string(input_path).expect("Failed to read file");
         tokenize(&input)
             .unwrap_or_else(|errs| {
@@ -181,8 +184,18 @@ fn test_lexer() {
             panic!("Failed to read solution");
         });
         if out_buffer != solution {
-            panic!("Test failed for {}, expected: \n{}, found: \n{}", input_path, solution, out_buffer);
+            panic!(
+                "Test failed for {}, expected: \n{}, found: \n{}",
+                input_path, solution, out_buffer
+            );
         }
-        println!("{} passed.", input_path.rsplit('/').next().unwrap().trim_end_matches(".in"));
+        println!(
+            "{} passed.",
+            input_path
+                .rsplit('/')
+                .next()
+                .unwrap()
+                .trim_end_matches(".in")
+        );
     }
 }

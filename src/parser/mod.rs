@@ -10,36 +10,11 @@ use pest_derive::Parser;
 #[grammar = "./rules.pest"]
 pub(crate) struct SysYParser;
 
-pub struct ASTBuilder {}
+pub struct AstBuilder {}
 
-impl ASTBuilder {
+impl AstBuilder {
     fn build_ast(pair: pest::iterators::Pair<Rule>) -> Result<Box<AstNode>, String> {
         match pair.as_rule() {
-            Rule::CompUnit => {
-                let children = pair
-                    .into_inner()
-                    .map(ASTBuilder::build_ast)
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(Box::new(AstNode::CompUnit(children)))
-            }
-            Rule::Decl => {
-                let child = ASTBuilder::build_ast(pair.into_inner().next().unwrap())?;
-                Ok(Box::new(AstNode::Decl(child)))
-            }
-            Rule::BType => {
-                let btype = pair.as_str().to_string();
-                Ok(Box::new(AstNode::BType(btype)))
-            }
-            Rule::ConstDecl => {
-                let mut inner = pair.into_inner();
-                inner.next(); // consume 'Const'
-                let btype = ASTBuilder::build_ast(inner.next().unwrap())?;
-                let const_defs = inner
-                    .filter(|p| p.as_rule() != Rule::Comma && p.as_rule() != Rule::Semicolon)
-                    .map(ASTBuilder::build_ast)
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(Box::new(AstNode::ConstDecl { btype, const_defs }))
-            }
             Rule::ConstDef => {
                 let mut inner = pair.into_inner();
                 let ident = inner.next().unwrap().as_str().to_string();
@@ -48,7 +23,7 @@ impl ASTBuilder {
                 while let Some(next_pair) = inner.peek() {
                     if next_pair.as_rule() == Rule::LBracket {
                         inner.next(); // consume '['
-                        dimensions.push(ASTBuilder::build_ast(inner.next().unwrap())?); // IntegerConst
+                        dimensions.push(AstBuilder::build_ast(inner.next().unwrap())?); // IntegerConst
                         inner.next(); // consume ']'
                     } else if next_pair.as_rule() == Rule::Assign {
                         inner.next(); // consume '='
@@ -57,7 +32,7 @@ impl ASTBuilder {
                         break;
                     }
                 }
-                let init_val = ASTBuilder::build_ast(inner.next().unwrap())?;
+                let init_val = AstBuilder::build_ast(inner.next().unwrap())?;
                 Ok(Box::new(AstNode::ConstDef {
                     ident,
                     dimensions,
@@ -75,7 +50,7 @@ impl ASTBuilder {
                             break;
                         }
                         if next_pair.as_rule() != Rule::Comma {
-                            init_vals.push(ASTBuilder::build_ast(inner.next().unwrap())?);
+                            init_vals.push(AstBuilder::build_ast(inner.next().unwrap())?);
                         } else {
                             inner.next(); // consume ';'
                         }
@@ -84,7 +59,7 @@ impl ASTBuilder {
                         ast::ConstInitValType::List(init_vals),
                     )))
                 } else {
-                    let exp = ASTBuilder::build_ast(inner.next().unwrap())?;
+                    let exp = AstBuilder::build_ast(inner.next().unwrap())?;
                     Ok(Box::new(AstNode::ConstInitVal(ast::ConstInitValType::Exp(
                         exp,
                     ))))
@@ -92,10 +67,10 @@ impl ASTBuilder {
             }
             Rule::VarDecl => {
                 let mut inner = pair.into_inner();
-                let btype = ASTBuilder::build_ast(inner.next().unwrap())?;
+                let btype = AstBuilder::build_ast(inner.next().unwrap())?;
                 let var_defs = inner
                     .filter(|p| p.as_rule() != Rule::Comma && p.as_rule() != Rule::Semicolon)
-                    .map(ASTBuilder::build_ast)
+                    .map(AstBuilder::build_ast)
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Box::new(AstNode::VarDecl { btype, var_defs }))
             }
@@ -109,12 +84,12 @@ impl ASTBuilder {
                     match next_pair.as_rule() {
                         Rule::LBracket => {
                             inner.next(); // consume '['
-                            dimensions.push(ASTBuilder::build_ast(inner.next().unwrap())?); // IntegerConst
+                            dimensions.push(AstBuilder::build_ast(inner.next().unwrap())?); // IntegerConst
                             inner.next(); // consume ']'
                         }
                         Rule::Assign => {
                             inner.next(); // consume '='
-                            init_val = Some(ASTBuilder::build_ast(inner.next().unwrap())?);
+                            init_val = Some(AstBuilder::build_ast(inner.next().unwrap())?);
                             break;
                         }
                         _ => break,
@@ -139,7 +114,7 @@ impl ASTBuilder {
                             break;
                         }
                         if next_pair.as_rule() != Rule::Comma {
-                            init_vals.push(ASTBuilder::build_ast(inner.next().unwrap())?);
+                            init_vals.push(AstBuilder::build_ast(inner.next().unwrap())?);
                         } else if next_pair.as_rule() == Rule::Comma {
                             inner.next(); // consume ';'
                         } else {
@@ -150,23 +125,23 @@ impl ASTBuilder {
                         init_vals,
                     ))))
                 } else {
-                    let exp = ASTBuilder::build_ast(inner.next().unwrap())?;
+                    let exp = AstBuilder::build_ast(inner.next().unwrap())?;
                     Ok(Box::new(AstNode::InitVal(ast::InitValType::Exp(exp))))
                 }
             }
             Rule::FuncDef => {
                 let mut inner = pair.into_inner();
-                let func_type = ASTBuilder::build_ast(inner.next().unwrap())?;
+                let func_type = AstBuilder::build_ast(inner.next().unwrap())?;
                 let ident = inner.next().unwrap().as_str().to_string();
                 inner.next(); // consume '('
                 let mut params = None;
                 if let Some(next_pair) = inner.peek() {
                     if next_pair.as_rule() == Rule::FuncFParams {
-                        params = Some(ASTBuilder::build_ast(inner.next().unwrap())?);
+                        params = Some(AstBuilder::build_ast(inner.next().unwrap())?);
                     }
                 }
                 inner.next(); // consume ')'
-                let body = ASTBuilder::build_ast(inner.next().unwrap())?;
+                let body = AstBuilder::build_ast(inner.next().unwrap())?;
                 Ok(Box::new(AstNode::FuncDef {
                     func_type,
                     ident,
@@ -182,13 +157,13 @@ impl ASTBuilder {
                 let params = pair
                     .into_inner()
                     .filter(|p| p.as_rule() != Rule::Comma)
-                    .map(ASTBuilder::build_ast)
+                    .map(AstBuilder::build_ast)
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Box::new(AstNode::FuncFParams(params)))
             }
             Rule::FuncFParam => {
                 let mut inner = pair.into_inner();
-                let btype = ASTBuilder::build_ast(inner.next().unwrap())?;
+                let btype = AstBuilder::build_ast(inner.next().unwrap())?;
                 let ident = inner.next().unwrap().as_str().to_string();
                 let mut is_array = false;
                 let mut dimensions = Vec::new();
@@ -200,7 +175,7 @@ impl ASTBuilder {
                         while let Some(bracket) = inner.peek() {
                             if bracket.as_rule() == Rule::LBracket {
                                 inner.next(); // consume '['
-                                dimensions.push(ASTBuilder::build_ast(inner.next().unwrap())?); // IntegerConst
+                                dimensions.push(AstBuilder::build_ast(inner.next().unwrap())?); // IntegerConst
                                 inner.next(); // consume ']'
                             } else {
                                 break;
@@ -220,11 +195,11 @@ impl ASTBuilder {
                 let items = pair
                     .into_inner()
                     .filter(|p| p.as_rule() != Rule::LBrace && p.as_rule() != Rule::RBrace)
-                    .map(ASTBuilder::build_ast)
+                    .map(AstBuilder::build_ast)
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Box::new(AstNode::Block(items)))
             }
-            Rule::BlockItem => Ok(Box::new(AstNode::BlockItem(ASTBuilder::build_ast(
+            Rule::BlockItem => Ok(Box::new(AstNode::BlockItem(AstBuilder::build_ast(
                 pair.into_inner().next().unwrap(),
             )?))),
 
@@ -262,8 +237,145 @@ impl ASTBuilder {
             | Rule::Continue
             | Rule::Return => Err(format!("Unexpected terminal rule: {:?}", pair.as_rule())),
 
-            _ => Err(format!("Unhandled rule: {:?}", pair.as_rule())),
+            _ => Ok(Box::new(AstNode::try_from(pair)?)),
         }
+    }
+
+    fn build_comp_unit(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let children = pair
+            .into_inner()
+            .map(AstBuilder::build_ast)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(AstNode::CompUnit(children))
+    }
+
+    fn build_decl(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let child = AstBuilder::build_ast(pair.into_inner().next().unwrap())?;
+        Ok(AstNode::Decl(child))
+    }
+
+    fn build_btype(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let btype = pair.as_str().to_string();
+        Ok(AstNode::BType(btype))
+    }
+
+    fn build_const_decl(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let mut inner = pair.into_inner();
+        inner.next(); // consume 'Const'
+        let btype = AstBuilder::build_ast(inner.next().unwrap())?;
+        let const_defs = inner
+            .filter(|p| p.as_rule() != Rule::Comma && p.as_rule() != Rule::Semicolon)
+            .map(AstBuilder::build_ast)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(AstNode::ConstDecl { btype, const_defs })
+    }
+
+    fn build_const_def(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_const_init_val(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_var_decl(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_var_def(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_init_val(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_func_def(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_func_type(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_func_fparams(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_func_fparam(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_block(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_block_item(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_stmt(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_exp(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_cond(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_lval(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_primary_exp(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_number(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_unary_exp(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_unary_op(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_func_rparams(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_mul_exp(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_add_exp(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_rel_exp(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_eq_exp(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_and_exp(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_or_exp(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
+    }
+
+    fn build_const_exp(pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        unimplemented!()
     }
 
     fn display_ast_inner(pair: pest::iterators::Pair<Rule>, prefix: String, is_last: bool) {
@@ -291,24 +403,24 @@ impl ASTBuilder {
             } else {
                 format!("{}│   ", prefix)
             };
-            ASTBuilder::display_ast_inner(p, new_prefix, is_last_child);
+            AstBuilder::display_ast_inner(p, new_prefix, is_last_child);
         }
     }
 
     fn display_ast(pair: pest::iterators::Pair<Rule>) {
-        ASTBuilder::display_ast_inner(pair, "".to_string(), true);
+        AstBuilder::display_ast_inner(pair, "".to_string(), true);
     }
 }
 
 pub fn display_ast(input: &str) -> Result<(), String> {
     let parse_result = SysYParser::parse(Rule::parse, input).map_err(|e| format!("{}", e))?;
-    ASTBuilder::display_ast(parse_result.into_iter().next().unwrap());
+    AstBuilder::display_ast(parse_result.into_iter().next().unwrap());
     Ok(())
 }
 
 pub fn parse(input: &str) -> Result<(), String> {
     let parse_result = SysYParser::parse(Rule::parse, input).map_err(|e| format!("{}", e))?;
-    let _ = ASTBuilder::build_ast(parse_result.into_iter().next().unwrap());
+    let _ = AstBuilder::build_ast(parse_result.into_iter().next().unwrap());
     Ok(())
 }
 

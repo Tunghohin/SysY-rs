@@ -105,7 +105,7 @@ Stmt = {
 }
 
 Exp         = { AddExp }
-Cond        = { LOrExp }
+Cond        = { OrExp }
 LVal        = { Ident ~ (LBracket ~ Exp ~ RBracket)* }
 PrimaryExp  = { LParen ~ Exp ~ RParen | LVal | Number }
 Number      = { IntegerConst }
@@ -116,6 +116,6 @@ MulExp      = { UnaryExp ~ ((Mul | Div | Mod) ~ UnaryExp)* }
 AddExp      = { MulExp ~ ((Plus | Minus) ~ MulExp)* }
 RelExp      = { AddExp ~ ((Lt | Gt | Le | Ge) ~ AddExp)* }
 EqExp       = { RelExp ~ ((Eq | Neq) ~ RelExp)* }
-LAndExp     = { EqExp ~ (And ~ EqExp)* }
-LOrExp      = { LAndExp ~ (Or ~ LAndExp)* }
+AndExp      = { EqExp ~ (And ~ EqExp)* }
+OrExp       = { AndExp ~ (Or ~ AndExp)* }
 ConstExp    = { AddExp }
