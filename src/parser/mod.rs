@@ -3,7 +3,7 @@
 pub mod ast;
 
 use ast::AstNode;
-use pest::Parser;
+use pest::{Parser, error::ErrorVariant, error::InputLocation, error::LineColLocation};
 use pest_derive::Parser;
 
 pub use ast::*;
@@ -649,8 +649,41 @@ pub fn display_ast(input: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn pest_message_to_expecting(variant: &ErrorVariant<Rule>) -> String {
+    match variant {
+        ErrorVariant::ParsingError {
+            positives,
+            negatives: _,
+        } => {
+            let mut expected = Vec::new();
+            for rule in positives {
+                expected.push(format!("{:?}", rule));
+            }
+            expected.sort();
+            expected.dedup();
+            expected.join(", ")
+        }
+        _ => "Unknown parsing error".to_string(),
+    }
+}
+
 pub fn parse(input: &str) -> Result<Box<AstNode>, String> {
-    let parse_result = SysYParser::parse(Rule::prog, input).map_err(|e| format!("{}", e))?;
+    let parse_result = SysYParser::parse(Rule::prog, input).map_err(|e| match e.line_col {
+        LineColLocation::Pos((line, _col)) => {
+            format!(
+                "Error type B at Line {}: expecting {{{}}}",
+                line,
+                pest_message_to_expecting(&e.variant)
+            )
+        }
+        LineColLocation::Span((start_line, _start_col), (_end_line, _end_col)) => {
+            format!(
+                "Error type B at Line {}: expecting {{{}}}",
+                start_line,
+                pest_message_to_expecting(&e.variant)
+            )
+        }
+    })?;
     AstBuilder::build_ast(
         parse_result
             .into_iter()
@@ -664,14 +697,13 @@ pub fn parse(input: &str) -> Result<Box<AstNode>, String> {
 
 #[test]
 fn test_parser() {
-    let src = std::fs::read_to_string("./tests/parser/sample1.in").unwrap_or_default();
-    let root = parse(&src).unwrap_or_else(|e| {
-        println!("{}", e);
-        panic!()
-    });
-    println!("{:#?}", root);
-    // display_ast(&src).unwrap_or_else(|e| {
-    //     println!("{}", e);
-    //     panic!()
-    // });
+    let src = std::fs::read_to_string("./tests/parser/error1.in").unwrap_or_default();
+    match parse(&src) {
+        Ok(root) => {
+            println!("{:#?}", root);
+        }
+        Err(e) => {
+            println!("{}", e);
+        }
+    };
 }

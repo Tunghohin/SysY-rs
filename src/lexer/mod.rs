@@ -115,7 +115,7 @@ pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
                             })
                             .unwrap_or("");
                         errors.push(format!(
-                            "Error type B from line {}, column {} to line {}, column {}, near '{}'",
+                            "Error type A from line {}, column {} to line {}, column {}, near '{}'",
                             start_line,
                             start_col,
                             end_line + line_offset,

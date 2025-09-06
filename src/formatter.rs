@@ -541,10 +541,12 @@ pub fn test_formatter() {
         let src = fs::read_to_string(input_path).expect("Failed to read file");
         out_buffer.push_str(&format!(
             "{}",
-            format_ast(&crate::parser::parse(&src).unwrap_or_else(|e| {
-                println!("{}", e);
-                panic!()
-            }))
+            match crate::parser::parse(&src) {
+                Ok(root) => format_ast(&root),
+                Err(e) => {
+                    format!("{}", e)
+                }
+            }
         ));
 
         let solution = fs::read_to_string(solution_path).unwrap_or_else(|_| {
