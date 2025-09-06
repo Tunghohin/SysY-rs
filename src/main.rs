@@ -12,18 +12,11 @@ fn main() {
     }
     let input = fs::read_to_string(&args[1]).expect("Failed to read file");
 
-    lexer::tokenize(&input)
-        .unwrap_or_else(|errs| {
-            errs.iter().for_each(|err| {
-                eprintln!("{}", err);
-            });
-            vec![]
-        })
-        .iter()
-        .for_each(|token| match token.kind {
-            lexer::token::TokenKind::Eof => {}
-            _ => {
-                eprintln!("{}", token);
-            }
-        })
+    println!(
+        "{}",
+        formatter::format_ast(&crate::parser::parse(&input).unwrap_or_else(|e| {
+            println!("{}", e);
+            panic!()
+        }))
+    );
 }
