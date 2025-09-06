@@ -1,5 +1,6 @@
 use std::{env, fs};
 
+mod formatter;
 mod lexer;
 mod parser;
 

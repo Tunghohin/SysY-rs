@@ -1,0 +1,15 @@
+int main() {
+    if (1) {
+        int a = 2;
+    } else if (1) {
+
+        int b = 2;
+    } else {
+
+        int c = a + b;
+    }
+
+    if (true) {
+        a = 2;
+    } else c = 1;
+}

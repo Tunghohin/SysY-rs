@@ -78,11 +78,11 @@ Decl = { ConstDecl | VarDecl }
 BType = { Int }
 
 ConstDecl    = { Const ~ BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon }
-ConstDef     = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ Assign ~ ConstInitVal }
+ConstDef     = { Ident ~ (LBracket ~ ConstExp ~ RBracket)* ~ Assign ~ ConstInitVal }
 ConstInitVal = { ConstExp | LBrace ~ (ConstInitVal ~ (Comma ~ ConstInitVal)*)? ~ RBrace }
 
 VarDecl = { BType ~ VarDef ~ (Comma ~ VarDef)* ~ Semicolon }
-VarDef  = { Ident ~ (LBracket ~ IntegerConst ~ RBracket)* ~ (Assign ~ InitVal)? }
+VarDef  = { Ident ~ (LBracket ~ ConstExp ~ RBracket)* ~ (Assign ~ InitVal)? }
 InitVal = { Exp | LBrace ~ (InitVal ~ (Comma ~ InitVal)*)? ~ RBrace }
 
 FuncDef     = { FuncType ~ Ident ~ LParen ~ (FuncFParams)? ~ RParen ~ Block }

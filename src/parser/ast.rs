@@ -80,11 +80,11 @@ pub enum AstNode {
         lhs: Box<AstNode>,
         ops: Vec<(EqOpType, Box<AstNode>)>,
     },
-    LAndExp {
+    AndExp {
         lhs: Box<AstNode>,
         ops: Vec<(LogicOpType, Box<AstNode>)>,
     },
-    LOrExp {
+    OrExp {
         lhs: Box<AstNode>,
         ops: Vec<(LogicOpType, Box<AstNode>)>,
     },
@@ -222,11 +222,11 @@ pub enum ConstInitValType {
 
 #[derive(Debug)]
 pub enum InitValType {
-    Exp(Box<AstNode>),
-    List(Vec<Box<AstNode>>),
+    ConstExp(Box<AstNode>),
+    InitList(Vec<Box<AstNode>>),
 }
 
 #[derive(Debug)]
 pub enum NumberType {
-    IntegerConst(i32),
+    IntegerConst(String),
 }
