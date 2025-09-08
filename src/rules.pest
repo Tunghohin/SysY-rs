@@ -119,3 +119,5 @@ EqExp       = { RelExp ~ ((Eq | Neq) ~ RelExp)* }
 AndExp      = { EqExp ~ (And ~ EqExp)* }
 OrExp       = { AndExp ~ (Or ~ AndExp)* }
 ConstExp    = { AddExp }
+
+ParseError = @{ (!NEWLINE ~ ANY)+ ~ NEWLINE? }
