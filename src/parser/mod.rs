@@ -769,7 +769,7 @@ pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNode>, String> {
 
 #[test]
 fn test_parser() {
-    let src = std::fs::read_to_string("./tests/parser/1.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/parser/hack1.in").unwrap_or_default();
     match parse(&src, BuildConfig::default()) {
         Ok(root) => {
             println!("{:#?}", root);

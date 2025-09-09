@@ -18,21 +18,21 @@ Return   = @{ "return" ~ !ASCII_ALPHANUMERIC ~ !"_" }
 
 Ident = @{ !KEYWORD ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
+Eq        = { "==" }
+Neq       = { "!=" }
+Le        = { "<=" }
+Ge        = { ">=" }
+And       = { "&&" }
+Or        = { "||" }
 Plus      = { "+" }
 Minus     = { "-" }
 Mul       = { "*" }
 Div       = { "/" }
 Mod       = { "%" }
 Assign    = { "=" }
-Eq        = { "==" }
-Neq       = { "!=" }
 Lt        = { "<" }
 Gt        = { ">" }
-Le        = { "<=" }
-Ge        = { ">=" }
 Not       = { "!" }
-And       = { "&&" }
-Or        = { "||" }
 LParen    = { "(" }
 RParen    = { ")" }
 LBrace    = { "{" }
@@ -115,11 +115,10 @@ UnaryOp     = { Plus | Minus | Not }
 FuncRParams = { Exp ~ (Comma ~ Exp)* }
 MulExp      = { UnaryExp ~ ((Mul | Div | Mod) ~ UnaryExp)* }
 AddExp      = { MulExp ~ ((Plus | Minus) ~ MulExp)* }
-RelExp      = { AddExp ~ ((Lt | Gt | Le | Ge) ~ AddExp)* }
+RelExp      = { AddExp ~ ((Le | Ge | Lt | Gt) ~ AddExp)* }
 EqExp       = { RelExp ~ ((Eq | Neq) ~ RelExp)* }
 AndExp      = { EqExp ~ (And ~ EqExp)* }
 OrExp       = { AndExp ~ (Or ~ AndExp)* }
 ConstExp    = { AddExp }
 
-// ParseError = @{ (!(RBrace | Semicolon | NEWLINE) ~ ANY)+ ~ (RBrace | Semicolon | NEWLINE) }
 ParseError = @{ (!(RBrace | Semicolon | NEWLINE | RParen) ~ ANY)+ }
