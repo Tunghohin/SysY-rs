@@ -121,4 +121,5 @@ AndExp      = { EqExp ~ (And ~ EqExp)* }
 OrExp       = { AndExp ~ (Or ~ AndExp)* }
 ConstExp    = { AddExp }
 
-ParseError = @{ (!(RBrace | Semicolon | NEWLINE) ~ ANY)+ ~ (RBrace | Semicolon | NEWLINE) }
+// ParseError = @{ (!(RBrace | Semicolon | NEWLINE) ~ ANY)+ ~ (RBrace | Semicolon | NEWLINE) }
+ParseError = @{ (!(RBrace | Semicolon | NEWLINE | RParen) ~ ANY)+ }
