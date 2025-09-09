@@ -71,7 +71,7 @@ TOKEN    = _{
 // ============= Parser for SysY =============
 prog = { SOI ~ CompUnit ~ EOI }
 
-CompUnit = { (Decl | FuncDef)+ }
+CompUnit = { (Decl | FuncDef | ParseError)+ }
 
 Decl = { ConstDecl | VarDecl }
 
@@ -91,7 +91,7 @@ FuncFParams = { FuncFParam ~ (Comma ~ FuncFParam)* }
 FuncFParam  = { BType ~ Ident ~ (LBracket ~ RBracket ~ (LBracket ~ Exp ~ RBracket)*)? }
 
 Block     = { LBrace ~ (BlockItem)* ~ RBrace }
-BlockItem = { Decl | Stmt }
+BlockItem = { Decl | Stmt | ParseError }
 
 Stmt = {
     LVal ~ Assign ~ Exp ~ Semicolon
@@ -102,6 +102,7 @@ Stmt = {
   | Break ~ Semicolon
   | Continue ~ Semicolon
   | Return ~ (Exp)? ~ Semicolon
+  | ParseError
 }
 
 Exp         = { AddExp }
@@ -120,4 +121,4 @@ AndExp      = { EqExp ~ (And ~ EqExp)* }
 OrExp       = { AndExp ~ (Or ~ AndExp)* }
 ConstExp    = { AddExp }
 
-ParseError = @{ (!NEWLINE ~ ANY)+ ~ NEWLINE? }
+ParseError = @{ (!(RBrace | Semicolon | NEWLINE) ~ ANY)+ ~ (RBrace | Semicolon | NEWLINE) }

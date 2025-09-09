@@ -14,9 +14,13 @@ fn main() {
 
     println!(
         "{}",
-        formatter::format_ast(&crate::parser::parse(&input).unwrap_or_else(|e| {
-            println!("{}", e);
-            panic!()
-        }))
+        formatter::format_ast(
+            &crate::parser::parse(&input, crate::parser::BuildConfig::default()).unwrap_or_else(
+                |e| {
+                    println!("{}", e);
+                    panic!()
+                }
+            )
+        )
     );
 }

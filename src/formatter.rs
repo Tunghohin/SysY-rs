@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::parser::ast::*;
+use crate::parser::{BuildConfig, ast::*};
 use std::fmt::Write;
 use std::fs;
 
@@ -382,6 +382,8 @@ impl Formatter {
             AstNode::BType(btype) => {
                 self.write_str(btype);
             }
+
+            _ => {}
         }
     }
 
@@ -541,7 +543,7 @@ pub fn test_formatter() {
         let src = fs::read_to_string(input_path).expect("Failed to read file");
         out_buffer.push_str(&format!(
             "{}",
-            match crate::parser::parse(&src) {
+            match crate::parser::parse(&src, BuildConfig::default()) {
                 Ok(root) => format_ast(&root),
                 Err(e) => {
                     format!("{}", e)

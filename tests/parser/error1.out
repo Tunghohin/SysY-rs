@@ -1,1 +1,2 @@
-Error type B at Line 2: expecting {UnaryExp}
+Error type B at Line 2: int a[];
+Error type B at Line 3: return a][;
