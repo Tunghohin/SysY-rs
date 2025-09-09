@@ -60,6 +60,191 @@ int chain() {
     return f1(f2(f3(f4(f5(f6(f7(f8(f9(f10())))))))));
 }
 
+int nightmare() {
+    return !-+a * b / c % d + e - f < g <= h > i >= j == k != l && m || n;
+}
+
+int unary_chaos() {
+    return !!!---+++a;
+}
+
+int paren_hell() {
+    return ((((((a + b) * c) / d) % e) - f) > g) && (((h < i) || (j >= k)) && !(((l == m) != n) || o));
+}
+
+int array_madness(int arr[][2][3][3][3][3]) {
+    return arr[a[b[c[d]]]][e[f][g]][h + i][j * k][l / m][n % o];
+}
+
+int func_as_index(int matrix[]) {
+    return matrix[func1(func2(func3(a, b), c), func4(d))];
+}
+
+int nested_nightmare() {
+    if (a) {
+        while (b) {
+            if (c) {
+                while (d) {
+                    if (e) {
+                        if (f) {
+                            while (g) {
+                                if (h) {
+                                    if (i) {
+                                        break;
+                                    }
+                                    else {
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                        else {
+                            return 1;
+                        }
+                    }
+                }
+            }
+            else {
+                while (j) {
+                    if (k) {
+                        break;
+                    }
+                    continue;
+                }
+            }
+        }
+    }
+    else {
+        if (l) {
+            while (m) {
+                if (n) {
+                    return 2;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+int empty_chaos() {
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    if (a) {
+        ;
+        ;
+        ;
+        ;
+    }
+    else {
+        ;
+        ;
+        ;
+        ;
+    }
+    while (b) {
+        ;
+        ;
+        ;
+        ;
+        break;
+        ;
+        ;
+        ;
+        ;
+    }
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    ;
+    return 0;
+}
+
+int single_stmt_blocks() {
+    if (a)
+        if (b)
+            if (c)
+                while (d)
+                if (e)
+                    return 1;
+                else
+                    continue;
+    return 0;
+}
+const int complex_const[3][4][5] = {{{1, 2, 3, 4, 5}, {6, 7, 8, 9, 10}, {11, 12, 13, 14, 15}, {16, 17, 18, 19, 20}}, {{21, 22, 23, 24, 25}, {26, 27, 28, 29, 30}, {31, 32, 33, 34, 35}, {36, 37, 38, 39, 40}}, {{41, 42, 43, 44, 45}, {46, 47, 48, 49, 50}, {51, 52, 53, 54, 55}, {56, 57, 58, 59, 60}}}, single_const = 999, another_array[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+int a, b[10], c, d[5][3], e = 42, f[2] = {1, 2}, g, h[1][1][1] = {{{123}}};
+
+int param_nightmare(int a, int b[], int c[][10], int d[][2][2], int e[][5][2], int f[][20][30]) {
+    return a + b[0] + c[1][2] + d[0][1][2] + e[3][4][0] + f[5][6][7];
+}
+
+void no_param() {
+    return;
+}
+
+int many_params(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
+    return a + b + c + d + e + f + g + h + i + j;
+}
+const int ULTIMATE_MATRIX[5][4][3][2] = {{{{1, 2}, {3, 4}, {5, 6}}, {{7, 8}, {9, 10}, {11, 12}}, {{13, 14}, {15, 16}, {17, 18}}, {{19, 20}, {21, 22}, {23, 24}}}, {{{25, 26}, {27, 28}, {29, 30}}, {{31, 32}, {33, 34}, {35, 36}}, {{37, 38}, {39, 40}, {41, 42}}, {{43, 44}, {45, 46}, {47, 48}}}, {{{49, 50}, {51, 52}, {53, 54}}, {{55, 56}, {57, 58}, {59, 60}}, {{61, 62}, {63, 64}, {65, 66}}, {{67, 68}, {69, 70}, {71, 72}}}, {{{73, 74}, {75, 76}, {77, 78}}, {{79, 80}, {81, 82}, {83, 84}}, {{85, 86}, {87, 88}, {89, 90}}, {{91, 92}, {93, 94}, {95, 96}}}, {{{97, 98}, {99, 100}, {101, 102}}, {{103, 104}, {105, 106}, {107, 108}}, {{109, 110}, {111, 112}, {113, 114}}, {{115, 116}, {117, 118}, {119, 120}}}};
+
+int ultimate_boss_fight(int simple_param, int array_param[], int matrix_param[][10][20], int tensor_param[][2][3][3][3]) {
+    int local_vars[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, single_var = 42, another_array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    const int local_const = 999, const_array[5] = {100, 200, 300, 400, 500};
+    if (simple_param > 0 && (array_param[0] < matrix_param[1][2][3] || tensor_param[0][1][2][3][4] == ULTIMATE_MATRIX[4][3][2][1]) && !(local_vars[simple_param % 10] <= const_array[4] + local_const / 3)) {
+        while (local_var_counter < 100 && function_call_with_complex_params(array_param[complex_expression(a * b + c / d - e % f)], ULTIMATE_MATRIX[r][s][t][u] + another_function(v, w, x)) > threshold_value) {
+            if (nested_condition_from_hell(tensor_param[level1][level2][level3][level4][level5], local_vars, const_array)) {
+                if (sub_condition_1) {
+                    if (sub_condition_2) {
+                        if (sub_condition_3) {
+                            while (loop_condition_1) {
+                                if (loop_condition_2) {
+                                    break;
+                                }
+                                else {
+                                    continue;
+                                }
+                            }
+                        }
+                        else {
+                            return compute_result(ultra_complex_expression(a, b, c, d, e, f, g, h, i, j), another_ultra_complex_expression(array_param[index1] * matrix_param[index2][index3][index4] + tensor_param[i1][i2][i3][i4][i5] / ULTIMATE_MATRIX[j1][j2][j3][j4] - local_vars[k1] % const_array[k2] + local_const));
+                        }
+                    }
+                }
+            }
+            else {
+                while (another_while_condition && (complex_boolean_expr_1 || complex_boolean_expr_2) && !(negated_complex_expr)) {
+                    local_vars[counter % 10] = mega_function_call(param1 + param2 * param3 / param4 - param5, array_access_chain[idx1][idx2] + matrix_chain[idx3][idx4][idx5]);
+                    counter = counter + 1;
+                    if (counter > limit) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    else {
+        return alternative_complex_computation(ULTIMATE_MATRIX[final_index_1][final_index_2][final_index_3][final_index_4], tensor_param[final_tensor_1][final_tensor_2][final_tensor_3][final_tensor_4][final_tensor_5], final_expression_1 + final_expression_2 * final_expression_3 - final_expression_4);
+    }
+    return (ultimate_final_expr_1 && ultimate_final_expr_2) && (ultimate_computation_1 + ultimate_computation_2) && (ultimate_alternative_1 - ultimate_alternative_2);
+}
+
 int main() {
     int a;
     int b, c, d;
