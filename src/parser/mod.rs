@@ -22,8 +22,11 @@ pub struct ParseErrorCollector {
 
 impl ParseErrorCollector {
     pub fn push_error(&mut self, line: usize, _col: usize, error: String) {
-        self.errors
-            .push(format!("Error type B at Line {}: {}", line, error));
+        self.errors.push(format!(
+            "Error type B at Line {}: {}",
+            line,
+            error.trim_end()
+        ));
     }
 
     pub fn is_empty(&self) -> bool {
@@ -766,7 +769,7 @@ pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNode>, String> {
 
 #[test]
 fn test_parser() {
-    let src = std::fs::read_to_string("./tests/parser/error1.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/parser/1.in").unwrap_or_default();
     match parse(&src, BuildConfig::default()) {
         Ok(root) => {
             println!("{:#?}", root);
