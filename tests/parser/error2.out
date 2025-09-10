@@ -1,16 +1,3 @@
-Error type B at Line 2: a[]
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    ;
-Error type B at Line 16: return a][;
-Error type B at Line 19: ffae
+Error type B at Line 2: DeclError
+Error type B at Line 16: StmtError
+Error type B at Line 19: StmtError

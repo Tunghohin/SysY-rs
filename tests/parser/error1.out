@@ -1,2 +1,2 @@
-Error type B at Line 2: a[];
-Error type B at Line 3: return a][;
+Error type B at Line 2: DeclError
+Error type B at Line 3: StmtError
