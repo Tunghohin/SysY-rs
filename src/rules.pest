@@ -71,18 +71,18 @@ TOKEN    = _{
 // ============= Parser for SysY =============
 prog = { SOI ~ CompUnit ~ EOI }
 
-CompUnit = { (Decl | FuncDef | TopError)+ }
+CompUnit = { (FuncDef | Decl | TopError)+ }
 
 Decl = { ConstDecl | VarDecl }
-DeclError = { (!Semicolon ~ ANY)+ ~ Semicolon }
+DeclError = { (!Semicolon ~ ANY)* ~ Semicolon }
 
 BType = { Int }
 
-ConstDecl    = { Const ~ BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon }
+ConstDecl    = { Const ~ ((BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon) | DeclError) }
 ConstDef     = { Ident ~ (LBracket ~ ConstExp ~ RBracket)* ~ Assign ~ ConstInitVal }
 ConstInitVal = { ConstExp | LBrace ~ (ConstInitVal ~ (Comma ~ ConstInitVal)*)? ~ RBrace }
 
-VarDecl = { BType ~ VarDef ~ (Comma ~ VarDef)* ~ Semicolon }
+VarDecl = { BType ~ ((VarDef ~ (Comma ~ VarDef)* ~ Semicolon) | DeclError) }
 VarDef  = { Ident ~ (LBracket ~ ConstExp ~ RBracket)* ~ (Assign ~ InitVal)? }
 InitVal = { Exp | LBrace ~ (InitVal ~ (Comma ~ InitVal)*)? ~ RBrace }
 
@@ -103,9 +103,9 @@ Stmt = {
   | Break ~ Semicolon
   | Continue ~ Semicolon
   | Return ~ (Exp)? ~ Semicolon
-  | StmtError ~ (Semicolon)?
+  | StmtError
 }
-StmtError = { (!(Semicolon | RBrace) ~ ANY)+}
+StmtError = { (!(Semicolon | RBrace) ~ ANY)+ ~ (Semicolon)?}
 
 Exp         = { Cond | AddExp }
 Cond        = { OrExp }

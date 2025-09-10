@@ -136,14 +136,17 @@ impl AstBuilder {
             Rule::OrExp => self.build_or_exp(pair).map(Box::new),
             Rule::ConstExp => self.build_const_exp(pair).map(Box::new),
             Rule::TopError | Rule::DeclError | Rule::StmtError => {
-                let rule = match pair.as_rule() {
-                    Rule::TopError => "TopError".to_string(),
-                    Rule::DeclError => "DeclError".to_string(),
-                    Rule::StmtError => "StmtError".to_string(),
-                    _ => "Unknown".to_string(),
-                };
-                self.error_collector
-                    .push_error(pair.line_col().0, pair.line_col().1, rule);
+                // let rule = match pair.as_rule() {
+                //     Rule::TopError => "TopError".to_string(),
+                //     Rule::DeclError => "DeclError".to_string(),
+                //     Rule::StmtError => "StmtError".to_string(),
+                //     _ => "Unknown".to_string(),
+                // };
+                self.error_collector.push_error(
+                    pair.line_col().0,
+                    pair.line_col().1,
+                    pair.as_str().to_string(),
+                );
                 Ok(Box::new(AstNode::ParseError))
             }
             _ => Err(format!("Unexpected rule: {:?}", pair.as_rule())),
@@ -772,13 +775,14 @@ pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNode>, String> {
 
 #[test]
 fn test_parser() {
-    let src = std::fs::read_to_string("./tests/parser/hack1.in").unwrap_or_default();
-    match parse(&src, BuildConfig::default()) {
-        Ok(root) => {
-            println!("{:#?}", root);
-        }
-        Err(e) => {
-            println!("{}", e);
-        }
-    };
+    let src = std::fs::read_to_string("./tests/parser/block1.in").unwrap_or_default();
+    display_ast(&src);
+    // match parse(&src, BuildConfig::default()) {
+    //     Ok(root) => {
+    //         println!("{:#?}", root);
+    //     }
+    //     Err(e) => {
+    //         println!("{}", e);
+    //     }
+    // };
 }
