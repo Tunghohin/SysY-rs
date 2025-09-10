@@ -136,11 +136,14 @@ impl AstBuilder {
             Rule::OrExp => self.build_or_exp(pair).map(Box::new),
             Rule::ConstExp => self.build_const_exp(pair).map(Box::new),
             Rule::TopError | Rule::DeclError | Rule::StmtError => {
-                self.error_collector.push_error(
-                    pair.line_col().0,
-                    pair.line_col().1,
-                    pair.as_str().to_string(),
-                );
+                let rule = match pair.as_rule() {
+                    Rule::TopError => "TopError".to_string(),
+                    Rule::DeclError => "DeclError".to_string(),
+                    Rule::StmtError => "StmtError".to_string(),
+                    _ => "Unknown".to_string(),
+                };
+                self.error_collector
+                    .push_error(pair.line_col().0, pair.line_col().1, rule);
                 Ok(Box::new(AstNode::ParseError))
             }
             _ => Err(format!("Unexpected rule: {:?}", pair.as_rule())),
