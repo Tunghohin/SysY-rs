@@ -135,7 +135,7 @@ impl AstBuilder {
             Rule::AndExp => self.build_and_exp(pair).map(Box::new),
             Rule::OrExp => self.build_or_exp(pair).map(Box::new),
             Rule::ConstExp => self.build_const_exp(pair).map(Box::new),
-            Rule::ParseError => {
+            Rule::TopError | Rule::DeclError | Rule::StmtError => {
                 self.error_collector.push_error(
                     pair.line_col().0,
                     pair.line_col().1,
