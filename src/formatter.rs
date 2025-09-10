@@ -519,12 +519,6 @@ pub fn format_ast(ast: &AstNode) -> String {
 
 #[test]
 pub fn test_formatter() {
-    // let src = std::fs::read_to_string("./tests/parser/sample1.in").unwrap_or_default();
-    // let root = crate::parser::parse(&src).unwrap_or_else(|e| {
-    //     println!("{}", e);
-    //     panic!()
-    // });
-    // println!("{}", format_ast(&root));
     let case_dir = std::path::Path::new("./tests/parser");
 
     let mut entries: Vec<_> = fs::read_dir(case_dir)
