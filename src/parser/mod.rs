@@ -2,7 +2,7 @@
 
 pub mod ast;
 
-use ast::AstNode;
+use ast::AstNodeInner;
 use pest::{Parser, error::ErrorVariant, error::InputLocation, error::LineColLocation};
 use pest_derive::Parser;
 
@@ -144,91 +144,100 @@ impl AstBuilder {
                 };
                 self.error_collector
                     .push_error(pair.line_col().0, pair.line_col().1, rule);
-                Ok(Box::new(AstNode::ParseError))
+                Ok(Box::new(AstNodeInner::ParseError))
             }
             _ => Err(format!("Unexpected rule: {:?}", pair.as_rule())),
         }
     }
 
     fn build_comp_unit(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        Ok(AstNode::CompUnit(
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::CompUnit(
             pair.into_inner()
                 .map(|p| self.build_ast_node(p))
                 .collect::<Result<Vec<_>, _>>()?,
-        ))
+        );
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_decl(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        Ok(AstNode::Decl(
-            self.build_ast_node(pair.into_inner().next().unwrap())?,
-        ))
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::Decl(self.build_ast_node(pair.into_inner().next().unwrap())?);
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_btype(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        Ok(AstNode::BType(pair.as_str().to_string()))
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::BType(pair.as_str().to_string());
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_const_decl(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
+        let line_col = pair.line_col();
 
-        inner.next(); // consume 'Const'
-
-        let btype = self.build_ast_node(inner.next().unwrap())?;
-
-        let const_defs = inner
+        let mut pair_inner = pair.into_inner();
+        pair_inner.next(); // consume 'Const'
+        let btype = self.build_ast_node(pair_inner.next().unwrap())?;
+        let const_defs = pair_inner
             .filter(|p| p.as_rule() != Rule::Comma && p.as_rule() != Rule::Semicolon)
             .map(|p| self.build_ast_node(p))
             .collect::<Result<Vec<_>, _>>()?;
+        let inner = AstNodeInner::ConstDecl { btype, const_defs };
 
-        Ok(AstNode::ConstDecl { btype, const_defs })
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_const_def(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
+        let line_col = pair.line_col();
 
-        let ident = inner.next().unwrap().as_str().to_string();
-
+        let mut pair_inner = pair.into_inner();
+        let ident = pair_inner.next().unwrap().as_str().to_string();
         let mut dimensions = Vec::new();
-        while let Some(next_pair) = inner.peek() {
+        while let Some(next_pair) = pair_inner.peek() {
             if next_pair.as_rule() == Rule::LBracket {
-                inner.next(); // consume '['
-                dimensions.push(self.build_ast_node(inner.next().unwrap())?); // ConstExp
-                inner.next(); // consume ']'
+                pair_inner.next(); // consume '['
+                dimensions.push(self.build_ast_node(pair_inner.next().unwrap())?); // ConstExp
+                pair_inner.next(); // consume ']'
             } else {
                 break;
             }
         }
+        pair_inner.next(); // consume '='
+        let init_val = self.build_ast_node(pair_inner.next().unwrap())?;
 
-        inner.next(); // consume '='
-        let init_val = self.build_ast_node(inner.next().unwrap())?;
-
-        Ok(AstNode::ConstDef {
+        let inner = AstNodeInner::ConstDef {
             ident,
             dimensions,
             init_val,
-        })
+        };
+
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_const_init_val(
         &mut self,
         pair: pest::iterators::Pair<Rule>,
     ) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
-        match inner.peek().unwrap().as_rule() {
-            Rule::ConstExp => Ok(AstNode::ConstInitVal(ast::ConstInitValType::ConstExp(
-                self.build_ast_node(inner.next().unwrap())?,
-            ))),
+        let line_col = pair.line_col();
+        let mut pair_inner = pair.into_inner();
+        match pair_inner.peek().unwrap().as_rule() {
+            Rule::ConstExp => {
+                let inner = AstNodeInner::ConstInitVal(ast::ConstInitValType::ConstExp(
+                    self.build_ast_node(pair_inner.next().unwrap())?,
+                ));
+                Ok(AstNode { inner, line_col })
+            }
             Rule::LBrace => {
-                inner.next(); // consume '{'
+                pair_inner.next(); // consume '{'
                 let mut init_vals = Vec::new();
-                while let Some(next_pair) = inner.peek() {
+                while let Some(next_pair) = pair_inner.peek() {
                     if next_pair.as_rule() == Rule::RBrace {
                         break;
                     }
                     if next_pair.as_rule() != Rule::Comma {
-                        init_vals.push(self.build_ast_node(inner.next().unwrap())?);
+                        init_vals.push(self.build_ast_node(pair_inner.next().unwrap())?);
                     } else if next_pair.as_rule() == Rule::Comma {
-                        inner.next(); // consume ','
+                        pair_inner.next(); // consume ','
                     } else {
                         return Err(format!(
                             "Unexpected rule in ConstInitVal: {:?}",
@@ -236,70 +245,75 @@ impl AstBuilder {
                         ))?;
                     }
                 }
-                Ok(AstNode::ConstInitVal(ast::ConstInitValType::InitList(
-                    init_vals,
-                )))
+                let inner = AstNodeInner::ConstInitVal(ast::ConstInitValType::InitList(init_vals));
+                Ok(AstNode { inner, line_col })
             }
             _ => Err(format!(
                 "Unexpected rule in ConstInitVal: {:?}",
-                inner.peek().unwrap().as_rule()
+                pair_inner.peek().unwrap().as_rule()
             )),
         }
     }
 
     fn build_var_decl(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let line_col = pair.line_col();
+
         let mut inner = pair.into_inner();
         let btype = self.build_ast_node(inner.next().unwrap())?;
         let var_defs = inner
             .filter(|p| p.as_rule() != Rule::Comma && p.as_rule() != Rule::Semicolon)
             .map(|p| self.build_ast_node(p))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(AstNode::VarDecl { btype, var_defs })
+        let inner = AstNodeInner::VarDecl { btype, var_defs };
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_var_def(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
-        let ident = inner.next().unwrap().as_str().to_string();
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        let ident = pair_inner.next().unwrap().as_str().to_string();
         let mut dimensions = Vec::new();
         let mut init_val = None;
-
-        while let Some(next_pair) = inner.peek() {
+        while let Some(next_pair) = pair_inner.peek() {
             match next_pair.as_rule() {
                 Rule::LBracket => {
-                    inner.next(); // consume '['
-                    dimensions.push(self.build_ast_node(inner.next().unwrap())?); // ConstExp
-                    inner.next(); // consume ']'
+                    pair_inner.next(); // consume '['
+                    dimensions.push(self.build_ast_node(pair_inner.next().unwrap())?); // ConstExp
+                    pair_inner.next(); // consume ']'
                 }
                 Rule::Assign => {
-                    inner.next(); // consume '='
-                    init_val = Some(self.build_ast_node(inner.next().unwrap())?);
+                    pair_inner.next(); // consume '='
+                    init_val = Some(self.build_ast_node(pair_inner.next().unwrap())?);
                     break;
                 }
                 _ => break,
             }
         }
-
-        Ok(AstNode::VarDef {
+        let inner = AstNodeInner::VarDef {
             ident,
             dimensions,
             init_val,
-        })
+        };
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_init_val(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
-        match inner.peek().unwrap().as_rule() {
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        match pair_inner.peek().unwrap().as_rule() {
             Rule::LBrace => {
-                inner.next(); // consume '{'
+                pair_inner.next(); // consume '{'
                 let mut init_vals = Vec::new();
-                while let Some(next_pair) = inner.peek() {
+                while let Some(next_pair) = pair_inner.peek() {
                     if next_pair.as_rule() == Rule::RBrace {
                         break;
                     }
                     if next_pair.as_rule() != Rule::Comma {
-                        init_vals.push(self.build_ast_node(inner.next().unwrap())?);
+                        init_vals.push(self.build_ast_node(pair_inner.next().unwrap())?);
                     } else if next_pair.as_rule() == Rule::Comma {
-                        inner.next(); // consume ','
+                        pair_inner.next(); // consume ','
                     } else {
                         return Err(format!(
                             "Unexpected rule in init_val: {:?}",
@@ -307,126 +321,145 @@ impl AstBuilder {
                         ))?;
                     }
                 }
-                Ok(AstNode::InitVal(ast::InitValType::InitList(init_vals)))
+                let inner = AstNodeInner::InitVal(ast::InitValType::InitList(init_vals));
+                Ok(AstNode { inner, line_col })
             }
-            Rule::Exp => Ok(AstNode::InitVal(ast::InitValType::ConstExp(
-                self.build_ast_node(inner.next().unwrap())?,
-            ))),
+            Rule::Exp => {
+                let inner = AstNodeInner::InitVal(ast::InitValType::ConstExp(
+                    self.build_ast_node(pair_inner.next().unwrap())?,
+                ));
+                Ok(AstNode { inner, line_col })
+            }
             _ => Err(format!(
                 "Unexpected rule in init_val: {:?}",
-                inner.peek().unwrap().as_rule()
+                pair_inner.peek().unwrap().as_rule()
             )),
         }
     }
 
     fn build_func_def(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
-        let func_type = self.build_ast_node(inner.next().unwrap())?;
-        let ident = inner.next().unwrap().as_str().to_string();
-        inner.next(); // consume '('
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        let func_type = self.build_ast_node(pair_inner.next().unwrap())?;
+        let ident = pair_inner.next().unwrap().as_str().to_string();
+        pair_inner.next(); // consume '('
         let mut params = None;
-        if let Some(next_pair) = inner.peek() {
+        if let Some(next_pair) = pair_inner.peek() {
             if next_pair.as_rule() == Rule::FuncFParams {
-                params = Some(self.build_ast_node(inner.next().unwrap())?);
+                params = Some(self.build_ast_node(pair_inner.next().unwrap())?);
             }
         }
-        inner.next(); // consume ')'
-        let body = self.build_ast_node(inner.next().unwrap())?;
-        Ok(AstNode::FuncDef {
+        pair_inner.next(); // consume ')'
+        let body = self.build_ast_node(pair_inner.next().unwrap())?;
+        let inner = AstNodeInner::FuncDef {
             func_type,
             ident,
             params,
             body,
-        })
+        };
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_func_type(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let func_type = pair.as_str().to_string();
-        Ok(AstNode::FuncType(func_type))
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::FuncType(pair.as_str().to_string());
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_func_fparams(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let params = pair
-            .into_inner()
-            .filter(|p| p.as_rule() != Rule::Comma)
-            .map(|p| self.build_ast_node(p))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(AstNode::FuncFParams(params))
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::FuncFParams(
+            pair.into_inner()
+                .filter(|p| p.as_rule() != Rule::Comma)
+                .map(|p| self.build_ast_node(p))
+                .collect::<Result<Vec<_>, _>>()?,
+        );
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_func_fparam(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
-        let btype = self.build_ast_node(inner.next().unwrap())?;
-        let ident = inner.next().unwrap().as_str().to_string();
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        let btype = self.build_ast_node(pair_inner.next().unwrap())?;
+        let ident = pair_inner.next().unwrap().as_str().to_string();
         let mut is_array = false;
         let mut dimensions = Vec::new();
-        if let Some(next_pair) = inner.peek() {
+        if let Some(next_pair) = pair_inner.peek() {
             if next_pair.as_rule() == Rule::LBracket {
-                inner.next(); // consume '['
-                inner.next(); // consume ']'
+                pair_inner.next(); // consume '['
+                pair_inner.next(); // consume ']'
                 is_array = true;
-                while let Some(bracket) = inner.peek() {
+                while let Some(bracket) = pair_inner.peek() {
                     if bracket.as_rule() == Rule::LBracket {
-                        inner.next(); // consume '['
-                        dimensions.push(self.build_ast_node(inner.next().unwrap())?); // ConstExp
-                        inner.next(); // consume ']'
+                        pair_inner.next(); // consume '['
+                        dimensions.push(self.build_ast_node(pair_inner.next().unwrap())?); // ConstExp
+                        pair_inner.next(); // consume ']'
                     } else {
                         break;
                     }
                 }
             }
         }
-
-        Ok(AstNode::FuncFParam {
+        let inner = AstNodeInner::FuncFParam {
             btype,
             ident,
             is_array,
             dimensions,
-        })
+        };
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_block(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let items = pair
-            .into_inner()
-            .filter(|p| p.as_rule() != Rule::LBrace && p.as_rule() != Rule::RBrace)
-            .map(|p| self.build_ast_node(p))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(AstNode::Block(items))
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::Block(
+            pair.into_inner()
+                .filter(|p| p.as_rule() != Rule::LBrace && p.as_rule() != Rule::RBrace)
+                .map(|p| self.build_ast_node(p))
+                .collect::<Result<Vec<_>, _>>()?,
+        );
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_block_item(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        Ok(AstNode::BlockItem(
-            self.build_ast_node(pair.into_inner().next().unwrap())?,
-        ))
+        let line_col = pair.line_col();
+        let inner =
+            AstNodeInner::BlockItem(self.build_ast_node(pair.into_inner().next().unwrap())?);
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_stmt(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
-        match inner.peek().unwrap().as_rule() {
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        match pair_inner.peek().unwrap().as_rule() {
             Rule::LVal => {
-                return Ok(AstNode::Stmt({
-                    let lval = self.build_ast_node(inner.next().unwrap())?;
-                    inner.next(); // consume '='
-                    let exp = self.build_ast_node(inner.next().unwrap())?;
+                let inner = AstNodeInner::Stmt({
+                    let lval = self.build_ast_node(pair_inner.next().unwrap())?;
+                    pair_inner.next(); // consume '='
+                    let exp = self.build_ast_node(pair_inner.next().unwrap())?;
                     Box::new(ast::StmtType::Assign { lval, exp })
-                }));
+                });
+                Ok(AstNode { inner, line_col })
             }
             Rule::Block => {
-                return Ok(AstNode::Stmt(Box::new(ast::StmtType::Block(
-                    self.build_ast_node(inner.next().unwrap())?,
-                ))));
+                let inner = AstNodeInner::Stmt(Box::new(ast::StmtType::Block(
+                    self.build_ast_node(pair_inner.next().unwrap())?,
+                )));
+                Ok(AstNode { inner, line_col })
             }
             Rule::If => {
-                return Ok(AstNode::Stmt(Box::new({
-                    inner.next(); // consume 'if'
-                    inner.next(); // consume '('
-                    let cond = self.build_ast_node(inner.next().unwrap())?;
-                    inner.next(); // consume ')'
-                    let then_stmt = self.build_ast_node(inner.next().unwrap())?;
-                    let else_stmt = if let Some(else_token) = inner.peek() {
+                let inner = AstNodeInner::Stmt(Box::new({
+                    pair_inner.next(); // consume 'if'
+                    pair_inner.next(); // consume '('
+                    let cond = self.build_ast_node(pair_inner.next().unwrap())?;
+                    pair_inner.next(); // consume ')'
+                    let then_stmt = self.build_ast_node(pair_inner.next().unwrap())?;
+                    let else_stmt = if let Some(else_token) = pair_inner.peek() {
                         if else_token.as_rule() == Rule::Else {
-                            inner.next(); // consume 'else'
-                            Some(self.build_ast_node(inner.next().unwrap())?)
+                            pair_inner.next(); // consume 'else'
+                            Some(self.build_ast_node(pair_inner.next().unwrap())?)
                         } else {
                             None
                         }
@@ -438,30 +471,34 @@ impl AstBuilder {
                         then_stmt,
                         else_stmt,
                     }
-                })));
+                }));
+                Ok(AstNode { inner, line_col })
             }
             Rule::While => {
-                return Ok(AstNode::Stmt(Box::new({
-                    inner.next(); // consume 'while'
-                    inner.next(); // consume '('
-                    let cond = self.build_ast_node(inner.next().unwrap())?;
-                    inner.next(); // consume ')'
-                    let stmt = self.build_ast_node(inner.next().unwrap())?;
+                let inner = AstNodeInner::Stmt(Box::new({
+                    pair_inner.next(); // consume 'while'
+                    pair_inner.next(); // consume '('
+                    let cond = self.build_ast_node(pair_inner.next().unwrap())?;
+                    pair_inner.next(); // consume ')'
+                    let stmt = self.build_ast_node(pair_inner.next().unwrap())?;
                     ast::StmtType::While { cond, stmt }
-                })));
+                }));
+                Ok(AstNode { inner, line_col })
             }
             Rule::Break => {
-                return Ok(AstNode::Stmt(Box::new(ast::StmtType::Break)));
+                let inner = AstNodeInner::Stmt(Box::new(ast::StmtType::Break));
+                Ok(AstNode { inner, line_col })
             }
             Rule::Continue => {
-                return Ok(AstNode::Stmt(Box::new(ast::StmtType::Continue)));
+                let inner = AstNodeInner::Stmt(Box::new(ast::StmtType::Continue));
+                Ok(AstNode { inner, line_col })
             }
             Rule::Return => {
-                return Ok(AstNode::Stmt(Box::new({
-                    inner.next(); // consume 'return'
-                    let exp = if let Some(next_pair) = inner.peek() {
+                let inner = AstNodeInner::Stmt(Box::new({
+                    pair_inner.next(); // consume 'return'
+                    let exp = if let Some(next_pair) = pair_inner.peek() {
                         if next_pair.as_rule() != Rule::Semicolon {
-                            Some(self.build_ast_node(inner.next().unwrap())?)
+                            Some(self.build_ast_node(pair_inner.next().unwrap())?)
                         } else {
                             None
                         }
@@ -469,61 +506,75 @@ impl AstBuilder {
                         None
                     };
                     ast::StmtType::Return(exp)
-                })));
+                }));
+                Ok(AstNode { inner, line_col })
             }
             _ => {
-                let exp = if let Some(next_pair) = inner.peek() {
+                let exp = if let Some(next_pair) = pair_inner.peek() {
                     if next_pair.as_rule() != Rule::Semicolon {
-                        Some(self.build_ast_node(inner.next().unwrap())?)
+                        Some(self.build_ast_node(pair_inner.next().unwrap())?)
                     } else {
                         None
                     }
                 } else {
                     None
                 };
-                return Ok(AstNode::Stmt(Box::new(ast::StmtType::Exp(exp))));
+                let inner = AstNodeInner::Stmt(Box::new(ast::StmtType::Exp(exp)));
+                Ok(AstNode { inner, line_col })
             }
         }
     }
 
     fn build_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        Ok(AstNode::Exp(
-            self.build_ast_node(pair.into_inner().next().unwrap())?,
-        ))
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::Exp(self.build_ast_node(pair.into_inner().next().unwrap())?);
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_cond(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        Ok(AstNode::Cond(
-            self.build_ast_node(pair.into_inner().next().unwrap())?,
-        ))
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::Cond(self.build_ast_node(pair.into_inner().next().unwrap())?);
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_lval(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
-        Ok(AstNode::LVal {
-            ident: inner.next().unwrap().as_str().to_string(),
-            dimensions: inner
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        let inner = AstNodeInner::LVal {
+            ident: pair_inner.next().unwrap().as_str().to_string(),
+            dimensions: pair_inner
                 .filter(|p| p.as_rule() != Rule::LBracket && p.as_rule() != Rule::RBracket)
                 .map(|p| self.build_ast_node(p))
                 .collect::<Result<Vec<_>, _>>()?,
-        })
+        };
+
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_primary_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
-        if let Some(next_pair) = inner.peek() {
+        let line_col = pair.line_col();
+        let mut pair_inner = pair.into_inner();
+        if let Some(next_pair) = pair_inner.peek() {
             match next_pair.as_rule() {
-                Rule::LVal => Ok(AstNode::PrimaryExp(ast::PrimaryExpType::LVal(
-                    self.build_ast_node(inner.next().unwrap())?,
-                ))),
-                Rule::Number => Ok(AstNode::PrimaryExp(ast::PrimaryExpType::Number(
-                    self.build_ast_node(inner.next().unwrap())?,
-                ))),
+                Rule::LVal => {
+                    let inner = AstNodeInner::PrimaryExp(ast::PrimaryExpType::LVal(
+                        self.build_ast_node(pair_inner.next().unwrap())?,
+                    ));
+                    Ok(AstNode { inner, line_col })
+                }
+                Rule::Number => {
+                    let inner = AstNodeInner::PrimaryExp(ast::PrimaryExpType::LVal(
+                        self.build_ast_node(pair_inner.next().unwrap())?,
+                    ));
+                    Ok(AstNode { inner, line_col })
+                }
                 Rule::LParen => {
-                    inner.next(); // consume '('
-                    let exp = self.build_ast_node(inner.next().unwrap())?;
-                    inner.next(); // consume ')'
-                    Ok(AstNode::PrimaryExp(ast::PrimaryExpType::Exp(exp)))
+                    pair_inner.next(); // consume '('
+                    let exp = self.build_ast_node(pair_inner.next().unwrap())?;
+                    pair_inner.next(); // consume ')'
+                    let inner = AstNodeInner::PrimaryExp(ast::PrimaryExpType::Exp(exp));
+                    Ok(AstNode { inner, line_col })
                 }
                 _ => Err(format!(
                     "Unexpected rule in PrimaryExp: {:?}",
@@ -536,55 +587,51 @@ impl AstBuilder {
     }
 
     fn build_number(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        Ok(AstNode::Number(ast::NumberType::IntegerConst(
-            pair.as_str().to_string(),
-        )))
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::Number(ast::NumberType::IntegerConst(pair.as_str().to_string()));
+        Ok(AstNode { inner, line_col })
     }
 
     fn build_unary_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        let mut inner = pair.into_inner();
-        match inner.peek().unwrap().as_rule() {
+        let line_col = pair.line_col();
+        let mut pair_inner = pair.into_inner();
+        match pair_inner.peek().unwrap().as_rule() {
             Rule::Ident => {
-                let ident = inner.next().unwrap().as_str().to_string();
-                inner.next(); // consume '('
-                let args = if let Some(next_pair) = inner.peek() {
+                let ident = pair_inner.next().unwrap().as_str().to_string();
+                pair_inner.next(); // consume '('
+                let args = if let Some(next_pair) = pair_inner.peek() {
                     match next_pair.as_rule() {
-                        Rule::FuncRParams => Some(
-                            self.build_ast_node(inner.next().unwrap())
-                                .map(|node| match *node {
-                                    AstNode::FuncRParams(params) => params,
-                                    _ => vec![],
-                                })
-                                .map_err(|e| e)?,
-                        ),
+                        Rule::FuncRParams => Some(self.build_ast_node(pair)?),
                         _ => None,
                     }
                 } else {
                     None
                 };
-                inner.next(); // consume ')'
-                Ok(AstNode::UnaryExp(ast::UnaryExpType::FuncCall {
-                    ident,
-                    args,
-                }))
+                pair_inner.next(); // consume ')'
+
+                let inner = AstNodeInner::UnaryExp(ast::UnaryExpType::FuncCall { ident, args });
+                Ok(AstNode { inner, line_col })
             }
-            Rule::PrimaryExp => Ok(AstNode::UnaryExp(ast::UnaryExpType::PrimaryExp(
-                self.build_ast_node(inner.next().unwrap())?,
+            Rule::PrimaryExp => Ok(AstNodeInner::UnaryExp(ast::UnaryExpType::PrimaryExp(
+                self.build_ast_node(pair_inner.next().unwrap())?,
             ))),
             Rule::UnaryOp => {
-                let op = self.build_ast_node(inner.next().unwrap())?;
-                let exp = self.build_ast_node(inner.next().unwrap())?;
-                Ok(AstNode::UnaryExp(ast::UnaryExpType::Unary { op, exp }))
+                let op = self.build_ast_node(pair_inner.next().unwrap())?;
+                let exp = self.build_ast_node(pair_inner.next().unwrap())?;
+                Ok(AstNodeInner::UnaryExp(ast::UnaryExpType::Unary { op, exp }))
             }
             _ => Err(format!(
                 "Unexpected rule in UnaryExp: {:?}",
-                inner.peek().unwrap().as_rule()
+                pair_inner.peek().unwrap().as_rule()
             )),
         }
     }
 
-    fn build_unary_op(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        Ok(AstNode::UnaryOp({
+    fn build_unary_op(
+        &mut self,
+        pair: pest::iterators::Pair<Rule>,
+    ) -> Result<AstNodeInner, String> {
+        Ok(AstNodeInner::UnaryOp({
             let inner = pair.into_inner().next().unwrap();
             match inner.as_rule() {
                 Rule::Plus => ast::UnaryOpType::Plus,
@@ -595,16 +642,19 @@ impl AstBuilder {
         }))
     }
 
-    fn build_func_rparams(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+    fn build_func_rparams(
+        &mut self,
+        pair: pest::iterators::Pair<Rule>,
+    ) -> Result<AstNodeInner, String> {
         let params = pair
             .into_inner()
             .filter(|p| p.as_rule() != Rule::Comma)
             .map(|p| self.build_ast_node(p))
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(AstNode::FuncRParams(params))
+        Ok(AstNodeInner::FuncRParams(params))
     }
 
-    fn build_mul_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+    fn build_mul_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
         let mut inner = pair.into_inner();
         let lhs = self.build_ast_node(inner.next().unwrap())?;
         let mut ops = Vec::new();
@@ -618,10 +668,10 @@ impl AstBuilder {
             let rhs = self.build_ast_node(inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNode::MulExp { lhs, ops })
+        Ok(AstNodeInner::MulExp { lhs, ops })
     }
 
-    fn build_add_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+    fn build_add_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
         let mut inner = pair.into_inner();
         let lhs = self.build_ast_node(inner.next().unwrap())?;
         let mut ops = Vec::new();
@@ -634,10 +684,10 @@ impl AstBuilder {
             let rhs = self.build_ast_node(inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNode::AddExp { lhs, ops })
+        Ok(AstNodeInner::AddExp { lhs, ops })
     }
 
-    fn build_rel_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+    fn build_rel_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
         let mut inner = pair.into_inner();
         let lhs = self.build_ast_node(inner.next().unwrap())?;
         let mut ops = Vec::new();
@@ -652,10 +702,10 @@ impl AstBuilder {
             let rhs = self.build_ast_node(inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNode::RelExp { lhs, ops })
+        Ok(AstNodeInner::RelExp { lhs, ops })
     }
 
-    fn build_eq_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+    fn build_eq_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
         let mut inner = pair.into_inner();
         let lhs = self.build_ast_node(inner.next().unwrap())?;
         let mut ops = Vec::new();
@@ -668,10 +718,10 @@ impl AstBuilder {
             let rhs = self.build_ast_node(inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNode::EqExp { lhs, ops })
+        Ok(AstNodeInner::EqExp { lhs, ops })
     }
 
-    fn build_and_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+    fn build_and_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
         let mut inner = pair.into_inner();
         let lhs = self.build_ast_node(inner.next().unwrap())?;
         let mut ops = Vec::new();
@@ -683,10 +733,10 @@ impl AstBuilder {
             let rhs = self.build_ast_node(inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNode::AndExp { lhs, ops })
+        Ok(AstNodeInner::AndExp { lhs, ops })
     }
 
-    fn build_or_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+    fn build_or_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
         let mut inner = pair.into_inner();
         let lhs = self.build_ast_node(inner.next().unwrap())?;
         let mut ops = Vec::new();
@@ -698,11 +748,14 @@ impl AstBuilder {
             let rhs = self.build_ast_node(inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNode::OrExp { lhs, ops })
+        Ok(AstNodeInner::OrExp { lhs, ops })
     }
 
-    fn build_const_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        Ok(AstNode::ConstExp(
+    fn build_const_exp(
+        &mut self,
+        pair: pest::iterators::Pair<Rule>,
+    ) -> Result<AstNodeInner, String> {
+        Ok(AstNodeInner::ConstExp(
             self.build_ast_node(pair.into_inner().next().unwrap())?,
         ))
     }
@@ -765,7 +818,7 @@ fn pest_message_to_expecting(variant: &ErrorVariant<Rule>) -> String {
     }
 }
 
-pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNode>, String> {
+pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNodeInner>, String> {
     let mut ast_builder = AstBuilder::new(config);
     ast_builder.build(src)
 }

@@ -17,7 +17,7 @@ impl Formatter {
         }
     }
 
-    pub fn format_ast(&mut self, ast: &AstNode) -> String {
+    pub fn format_ast(&mut self, ast: &AstNodeInner) -> String {
         self.format_node(ast);
         self.output.trim_end().to_string()
     }
@@ -36,12 +36,12 @@ impl Formatter {
         self.output.push_str(s);
     }
 
-    fn format_node(&mut self, node: &AstNode) {
+    fn format_node(&mut self, node: &AstNodeInner) {
         match node {
-            AstNode::CompUnit(children) => {
+            AstNodeInner::CompUnit(children) => {
                 let mut first_line = true;
                 for (i, child) in children.iter().enumerate() {
-                    if let AstNode::FuncDef { .. } = child.as_ref() {
+                    if let AstNodeInner::FuncDef { .. } = child.as_ref() {
                         if !first_line {
                             self.write_newline();
                         }
@@ -56,11 +56,11 @@ impl Formatter {
                 }
             }
 
-            AstNode::Decl(child) => {
+            AstNodeInner::Decl(child) => {
                 self.format_node(child);
             }
 
-            AstNode::ConstDecl { btype, const_defs } => {
+            AstNodeInner::ConstDecl { btype, const_defs } => {
                 self.write_str("const ");
                 self.format_node(btype);
                 self.write_str(" ");
@@ -73,7 +73,7 @@ impl Formatter {
                 self.write_str(";");
             }
 
-            AstNode::ConstDef {
+            AstNodeInner::ConstDef {
                 ident,
                 dimensions,
                 init_val,
@@ -88,7 +88,7 @@ impl Formatter {
                 self.format_node(init_val);
             }
 
-            AstNode::ConstInitVal(init_val_type) => match init_val_type {
+            AstNodeInner::ConstInitVal(init_val_type) => match init_val_type {
                 ConstInitValType::ConstExp(exp) => {
                     self.format_node(exp);
                 }
@@ -104,7 +104,7 @@ impl Formatter {
                 }
             },
 
-            AstNode::VarDecl { btype, var_defs } => {
+            AstNodeInner::VarDecl { btype, var_defs } => {
                 self.format_node(btype);
                 self.write_str(" ");
                 for (i, def) in var_defs.iter().enumerate() {
@@ -116,7 +116,7 @@ impl Formatter {
                 self.write_str(";");
             }
 
-            AstNode::VarDef {
+            AstNodeInner::VarDef {
                 ident,
                 dimensions,
                 init_val,
@@ -133,7 +133,7 @@ impl Formatter {
                 }
             }
 
-            AstNode::InitVal(init_val_type) => match init_val_type {
+            AstNodeInner::InitVal(init_val_type) => match init_val_type {
                 InitValType::ConstExp(exp) => {
                     self.format_node(exp);
                 }
@@ -149,7 +149,7 @@ impl Formatter {
                 }
             },
 
-            AstNode::FuncDef {
+            AstNodeInner::FuncDef {
                 func_type,
                 ident,
                 params,
@@ -167,11 +167,11 @@ impl Formatter {
                 self.format_node(body);
             }
 
-            AstNode::FuncType(func_type) => {
+            AstNodeInner::FuncType(func_type) => {
                 self.write_str(func_type);
             }
 
-            AstNode::FuncFParams(params) => {
+            AstNodeInner::FuncFParams(params) => {
                 for (i, param) in params.iter().enumerate() {
                     if i > 0 {
                         self.write_str(", ");
@@ -180,7 +180,7 @@ impl Formatter {
                 }
             }
 
-            AstNode::FuncFParam {
+            AstNodeInner::FuncFParam {
                 btype,
                 ident,
                 is_array,
@@ -199,7 +199,7 @@ impl Formatter {
                 }
             }
 
-            AstNode::Block(items) => {
+            AstNodeInner::Block(items) => {
                 self.write_str("{");
                 if !items.is_empty() {
                     self.write_newline();
@@ -220,24 +220,24 @@ impl Formatter {
                 }
             }
 
-            AstNode::BlockItem(item) => {
+            AstNodeInner::BlockItem(item) => {
                 self.write_indent();
                 self.format_node(item);
             }
 
-            AstNode::Stmt(stmt) => {
+            AstNodeInner::Stmt(stmt) => {
                 self.format_stmt_type(stmt);
             }
 
-            AstNode::Exp(exp) => {
+            AstNodeInner::Exp(exp) => {
                 self.format_node(exp);
             }
 
-            AstNode::Cond(cond) => {
+            AstNodeInner::Cond(cond) => {
                 self.format_node(cond);
             }
 
-            AstNode::LVal { ident, dimensions } => {
+            AstNodeInner::LVal { ident, dimensions } => {
                 self.write_str(ident);
                 for dim in dimensions {
                     self.write_str("[");
@@ -246,7 +246,7 @@ impl Formatter {
                 }
             }
 
-            AstNode::PrimaryExp(primary_type) => match primary_type {
+            AstNodeInner::PrimaryExp(primary_type) => match primary_type {
                 PrimaryExpType::Exp(exp) => {
                     self.write_str("(");
                     self.format_node(exp);
@@ -260,13 +260,13 @@ impl Formatter {
                 }
             },
 
-            AstNode::Number(number_type) => match number_type {
+            AstNodeInner::Number(number_type) => match number_type {
                 NumberType::IntegerConst(value) => {
                     write!(self.output, "{}", value).unwrap();
                 }
             },
 
-            AstNode::UnaryExp(unary_type) => match unary_type {
+            AstNodeInner::UnaryExp(unary_type) => match unary_type {
                 UnaryExpType::FuncCall { ident, args } => {
                     self.write_str(ident);
                     self.write_str("(");
@@ -289,13 +289,13 @@ impl Formatter {
                 }
             },
 
-            AstNode::UnaryOp(op_type) => match op_type {
+            AstNodeInner::UnaryOp(op_type) => match op_type {
                 UnaryOpType::Plus => self.write_str("+"),
                 UnaryOpType::Minus => self.write_str("-"),
                 UnaryOpType::Not => self.write_str("!"),
             },
 
-            AstNode::FuncRParams(args) => {
+            AstNodeInner::FuncRParams(args) => {
                 for (i, arg) in args.iter().enumerate() {
                     if i > 0 {
                         self.write_str(", ");
@@ -304,7 +304,7 @@ impl Formatter {
                 }
             }
 
-            AstNode::MulExp { lhs, ops } => {
+            AstNodeInner::MulExp { lhs, ops } => {
                 self.format_node(lhs);
                 for (op, rhs) in ops {
                     self.write_str(" ");
@@ -318,7 +318,7 @@ impl Formatter {
                 }
             }
 
-            AstNode::AddExp { lhs, ops } => {
+            AstNodeInner::AddExp { lhs, ops } => {
                 self.format_node(lhs);
                 for (op, rhs) in ops {
                     self.write_str(" ");
@@ -331,7 +331,7 @@ impl Formatter {
                 }
             }
 
-            AstNode::RelExp { lhs, ops } => {
+            AstNodeInner::RelExp { lhs, ops } => {
                 self.format_node(lhs);
                 for (op, rhs) in ops {
                     self.write_str(" ");
@@ -346,7 +346,7 @@ impl Formatter {
                 }
             }
 
-            AstNode::EqExp { lhs, ops } => {
+            AstNodeInner::EqExp { lhs, ops } => {
                 self.format_node(lhs);
                 for (op, rhs) in ops {
                     self.write_str(" ");
@@ -359,7 +359,7 @@ impl Formatter {
                 }
             }
 
-            AstNode::AndExp { lhs, ops } => {
+            AstNodeInner::AndExp { lhs, ops } => {
                 self.format_node(lhs);
                 for (_, rhs) in ops {
                     self.write_str(" && ");
@@ -367,7 +367,7 @@ impl Formatter {
                 }
             }
 
-            AstNode::OrExp { lhs, ops } => {
+            AstNodeInner::OrExp { lhs, ops } => {
                 self.format_node(lhs);
                 for (_, rhs) in ops {
                     self.write_str(" || ");
@@ -375,11 +375,11 @@ impl Formatter {
                 }
             }
 
-            AstNode::ConstExp(exp) => {
+            AstNodeInner::ConstExp(exp) => {
                 self.format_node(exp);
             }
 
-            AstNode::BType(btype) => {
+            AstNodeInner::BType(btype) => {
                 self.write_str(btype);
             }
 
@@ -417,7 +417,7 @@ impl Formatter {
                 self.write_str(")");
 
                 // 检查 then_stmt 是否是 Block
-                if let AstNode::Stmt(inner_stmt) = then_stmt.as_ref() {
+                if let AstNodeInner::Stmt(inner_stmt) = then_stmt.as_ref() {
                     if let StmtType::Block(_) = inner_stmt.as_ref() {
                         self.write_str(" ");
                         self.format_node(then_stmt);
@@ -441,7 +441,7 @@ impl Formatter {
                     self.write_indent();
                     self.write_str("else");
 
-                    if let AstNode::Stmt(else_inner) = else_part.as_ref() {
+                    if let AstNodeInner::Stmt(else_inner) = else_part.as_ref() {
                         match else_inner.as_ref() {
                             StmtType::If { .. } => {
                                 self.write_str(" ");
@@ -475,7 +475,7 @@ impl Formatter {
                 self.write_str(")");
 
                 // 检查 stmt 是否是 Block
-                if let AstNode::Stmt(inner_stmt) = stmt.as_ref() {
+                if let AstNodeInner::Stmt(inner_stmt) = stmt.as_ref() {
                     if let StmtType::Block(_) = inner_stmt.as_ref() {
                         self.write_str(" ");
                         self.format_node(stmt);
@@ -512,7 +512,7 @@ impl Formatter {
     }
 }
 
-pub fn format_ast(ast: &AstNode) -> String {
+pub fn format_ast(ast: &AstNodeInner) -> String {
     let mut formatter = Formatter::new();
     formatter.format_ast(ast)
 }

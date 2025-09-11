@@ -4,7 +4,23 @@ use crate::parser::Parser;
 use crate::parser::Rule;
 
 #[derive(Debug)]
-pub enum AstNode {
+pub struct AstNode {
+    pub inner: AstNodeInner,
+    pub line_col: (usize, usize),
+}
+
+impl AstNode {
+    pub fn new(inner: AstNodeInner, line_col: (usize, usize)) -> Self {
+        Self { inner, line_col }
+    }
+
+    pub fn as_inner(&self) -> &AstNodeInner {
+        &self.inner
+    }
+}
+
+#[derive(Debug)]
+pub enum AstNodeInner {
     CompUnit(Vec<Box<AstNode>>),
 
     Decl(Box<AstNode>),
@@ -91,56 +107,6 @@ pub enum AstNode {
     ConstExp(Box<AstNode>),
     ParseError,
 }
-
-// impl<'a> TryFrom<pest::iterators::Pair<'a, Rule>> for AstNode {
-//     type Error = String;
-
-//     fn try_from(pair: pest::iterators::Pair<'a, Rule>) -> Result<Self, Self::Error> {
-//         match pair.as_rule() {
-//             Rule::CompUnit => AstBuilder::build_comp_unit(pair),
-//             Rule::Decl => AstBuilder::build_decl(pair),
-//             Rule::BType => AstBuilder::build_btype(pair),
-//             Rule::ConstDecl => AstBuilder::build_const_decl(pair),
-//             Rule::ConstDef => AstBuilder::build_const_def(pair),
-//             Rule::ConstInitVal => AstBuilder::build_const_init_val(pair),
-//             Rule::VarDecl => AstBuilder::build_var_decl(pair),
-//             Rule::VarDef => AstBuilder::build_var_def(pair),
-//             Rule::InitVal => AstBuilder::build_init_val(pair),
-//             Rule::FuncDef => AstBuilder::build_func_def(pair),
-//             Rule::FuncType => AstBuilder::build_func_type(pair),
-//             Rule::FuncFParams => AstBuilder::build_func_fparams(pair),
-//             Rule::FuncFParam => AstBuilder::build_func_fparam(pair),
-//             Rule::Block => AstBuilder::build_block(pair),
-//             Rule::BlockItem => AstBuilder::build_block_item(pair),
-//             Rule::Stmt => AstBuilder::build_stmt(pair),
-//             Rule::Exp => AstBuilder::build_exp(pair),
-//             Rule::Cond => AstBuilder::build_cond(pair),
-//             Rule::LVal => AstBuilder::build_lval(pair),
-//             Rule::PrimaryExp => AstBuilder::build_primary_exp(pair),
-//             Rule::Number => AstBuilder::build_number(pair),
-//             Rule::UnaryExp => AstBuilder::build_unary_exp(pair),
-//             Rule::UnaryOp => AstBuilder::build_unary_op(pair),
-//             Rule::FuncRParams => AstBuilder::build_func_rparams(pair),
-//             Rule::MulExp => AstBuilder::build_mul_exp(pair),
-//             Rule::AddExp => AstBuilder::build_add_exp(pair),
-//             Rule::RelExp => AstBuilder::build_rel_exp(pair),
-//             Rule::EqExp => AstBuilder::build_eq_exp(pair),
-//             Rule::AndExp => AstBuilder::build_and_exp(pair),
-//             Rule::OrExp => AstBuilder::build_or_exp(pair),
-//             Rule::ConstExp => AstBuilder::build_const_exp(pair),
-//             Rule::ParseError => {
-//                 println!(
-//                     "line: {}, col: {}, {}",
-//                     pair.line_col().0,
-//                     pair.line_col().1,
-//                     pair.as_str()
-//                 );
-//                 Ok(AstNode::ParseError)
-//             }
-//             _ => Err(format!("Unexpected rule: {:?}", pair.as_rule())),
-//         }
-//     }
-// }
 
 #[derive(Debug)]
 pub enum UnaryExpType {
