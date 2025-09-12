@@ -144,7 +144,9 @@ impl AstBuilder {
                 };
                 self.error_collector
                     .push_error(pair.line_col().0, pair.line_col().1, rule);
-                Ok(Box::new(AstNodeInner::ParseError))
+                let line_col = pair.line_col();
+                let inner = AstNodeInner::ParseError;
+                Ok(Box::new(AstNode { inner, line_col }))
             }
             _ => Err(format!("Unexpected rule: {:?}", pair.as_rule())),
         }
@@ -601,7 +603,13 @@ impl AstBuilder {
                 pair_inner.next(); // consume '('
                 let args = if let Some(next_pair) = pair_inner.peek() {
                     match next_pair.as_rule() {
-                        Rule::FuncRParams => Some(self.build_ast_node(pair)?),
+                        Rule::FuncRParams => Some(
+                            self.build_ast_node(pair_inner.next().unwrap())
+                                .map(|node| match (*node).as_inner() {
+                                    _ => vec![],
+                                })
+                                .map_err(|e| e)?,
+                        ),
                         _ => None,
                     }
                 } else {
@@ -612,13 +620,18 @@ impl AstBuilder {
                 let inner = AstNodeInner::UnaryExp(ast::UnaryExpType::FuncCall { ident, args });
                 Ok(AstNode { inner, line_col })
             }
-            Rule::PrimaryExp => Ok(AstNodeInner::UnaryExp(ast::UnaryExpType::PrimaryExp(
-                self.build_ast_node(pair_inner.next().unwrap())?,
-            ))),
+            Rule::PrimaryExp => {
+                let inner = AstNodeInner::UnaryExp(ast::UnaryExpType::PrimaryExp(
+                    self.build_ast_node(pair_inner.next().unwrap())?,
+                ));
+                Ok(AstNode { inner, line_col })
+            }
             Rule::UnaryOp => {
                 let op = self.build_ast_node(pair_inner.next().unwrap())?;
                 let exp = self.build_ast_node(pair_inner.next().unwrap())?;
-                Ok(AstNodeInner::UnaryExp(ast::UnaryExpType::Unary { op, exp }))
+
+                let inner = AstNodeInner::UnaryExp(ast::UnaryExpType::Unary { op, exp });
+                Ok(AstNode { inner, line_col })
             }
             _ => Err(format!(
                 "Unexpected rule in UnaryExp: {:?}",
@@ -627,11 +640,9 @@ impl AstBuilder {
         }
     }
 
-    fn build_unary_op(
-        &mut self,
-        pair: pest::iterators::Pair<Rule>,
-    ) -> Result<AstNodeInner, String> {
-        Ok(AstNodeInner::UnaryOp({
+    fn build_unary_op(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::UnaryOp({
             let inner = pair.into_inner().next().unwrap();
             match inner.as_rule() {
                 Rule::Plus => ast::UnaryOpType::Plus,
@@ -639,59 +650,68 @@ impl AstBuilder {
                 Rule::Not => ast::UnaryOpType::Not,
                 _ => return Err(format!("Unexpected UnaryOp: {:?}", inner.as_rule())),
             }
-        }))
+        });
+        Ok(AstNode { inner, line_col })
     }
 
-    fn build_func_rparams(
-        &mut self,
-        pair: pest::iterators::Pair<Rule>,
-    ) -> Result<AstNodeInner, String> {
-        let params = pair
-            .into_inner()
-            .filter(|p| p.as_rule() != Rule::Comma)
-            .map(|p| self.build_ast_node(p))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(AstNodeInner::FuncRParams(params))
+    fn build_func_rparams(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::FuncRParams(
+            pair.into_inner()
+                .filter(|p| p.as_rule() != Rule::Comma)
+                .map(|p| self.build_ast_node(p))
+                .collect::<Result<Vec<_>, _>>()?,
+        );
+        Ok(AstNode { inner, line_col })
     }
 
-    fn build_mul_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
-        let mut inner = pair.into_inner();
-        let lhs = self.build_ast_node(inner.next().unwrap())?;
+    fn build_mul_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        let lhs = self.build_ast_node(pair_inner.next().unwrap())?;
         let mut ops = Vec::new();
-        while let Some(op) = inner.next() {
+        while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
                 Rule::Mul => ast::MulOpType::Mul,
                 Rule::Div => ast::MulOpType::Div,
                 Rule::Mod => ast::MulOpType::Mod,
                 _ => return Err(format!("Unexpected operator in MulExp: {:?}", op.as_rule())),
             };
-            let rhs = self.build_ast_node(inner.next().unwrap())?;
+            let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNodeInner::MulExp { lhs, ops })
+        let inner = AstNodeInner::MulExp { lhs, ops };
+        Ok(AstNode { inner, line_col })
     }
 
-    fn build_add_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
-        let mut inner = pair.into_inner();
-        let lhs = self.build_ast_node(inner.next().unwrap())?;
+    fn build_add_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        let lhs = self.build_ast_node(pair_inner.next().unwrap())?;
         let mut ops = Vec::new();
-        while let Some(op) = inner.next() {
+        while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
                 Rule::Plus => ast::AddOpType::Plus,
                 Rule::Minus => ast::AddOpType::Minus,
                 _ => return Err(format!("Unexpected operator in AddExp: {:?}", op.as_rule())),
             };
-            let rhs = self.build_ast_node(inner.next().unwrap())?;
+            let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNodeInner::AddExp { lhs, ops })
+        let inner = AstNodeInner::AddExp { lhs, ops };
+
+        Ok(AstNode { inner, line_col })
     }
 
-    fn build_rel_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
-        let mut inner = pair.into_inner();
-        let lhs = self.build_ast_node(inner.next().unwrap())?;
+    fn build_rel_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        let lhs = self.build_ast_node(pair_inner.next().unwrap())?;
         let mut ops = Vec::new();
-        while let Some(op) = inner.next() {
+        while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
                 Rule::Lt => ast::RelOpType::Lt,
                 Rule::Gt => ast::RelOpType::Gt,
@@ -699,65 +719,76 @@ impl AstBuilder {
                 Rule::Ge => ast::RelOpType::Ge,
                 _ => return Err(format!("Unexpected operator in RelExp: {:?}", op.as_rule())),
             };
-            let rhs = self.build_ast_node(inner.next().unwrap())?;
+            let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNodeInner::RelExp { lhs, ops })
+        let inner = AstNodeInner::RelExp { lhs, ops };
+
+        Ok(AstNode { inner, line_col })
     }
 
-    fn build_eq_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
-        let mut inner = pair.into_inner();
-        let lhs = self.build_ast_node(inner.next().unwrap())?;
+    fn build_eq_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        let lhs = self.build_ast_node(pair_inner.next().unwrap())?;
         let mut ops = Vec::new();
-        while let Some(op) = inner.next() {
+        while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
                 Rule::Eq => ast::EqOpType::Eq,
                 Rule::Neq => ast::EqOpType::Neq,
                 _ => return Err(format!("Unexpected operator in EqExp: {:?}", op.as_rule())),
             };
-            let rhs = self.build_ast_node(inner.next().unwrap())?;
+            let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNodeInner::EqExp { lhs, ops })
+        let inner = AstNodeInner::EqExp { lhs, ops };
+
+        Ok(AstNode { inner, line_col })
     }
 
-    fn build_and_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
-        let mut inner = pair.into_inner();
-        let lhs = self.build_ast_node(inner.next().unwrap())?;
+    fn build_and_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        let lhs = self.build_ast_node(pair_inner.next().unwrap())?;
         let mut ops = Vec::new();
-        while let Some(op) = inner.next() {
+        while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
                 Rule::And => ast::LogicOpType::And,
                 _ => return Err(format!("Unexpected operator in AndExp: {:?}", op.as_rule())),
             };
-            let rhs = self.build_ast_node(inner.next().unwrap())?;
+            let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNodeInner::AndExp { lhs, ops })
+        let inner = AstNodeInner::AndExp { lhs, ops };
+
+        Ok(AstNode { inner, line_col })
     }
 
-    fn build_or_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNodeInner, String> {
-        let mut inner = pair.into_inner();
-        let lhs = self.build_ast_node(inner.next().unwrap())?;
+    fn build_or_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let line_col = pair.line_col();
+
+        let mut pair_inner = pair.into_inner();
+        let lhs = self.build_ast_node(pair_inner.next().unwrap())?;
         let mut ops = Vec::new();
-        while let Some(op) = inner.next() {
+        while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
                 Rule::Or => ast::LogicOpType::Or,
                 _ => return Err(format!("Unexpected operator in OrExp: {:?}", op.as_rule())),
             };
-            let rhs = self.build_ast_node(inner.next().unwrap())?;
+            let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
             ops.push((op_type, rhs));
         }
-        Ok(AstNodeInner::OrExp { lhs, ops })
+        let inner = AstNodeInner::OrExp { lhs, ops };
+
+        Ok(AstNode { inner, line_col })
     }
 
-    fn build_const_exp(
-        &mut self,
-        pair: pest::iterators::Pair<Rule>,
-    ) -> Result<AstNodeInner, String> {
-        Ok(AstNodeInner::ConstExp(
-            self.build_ast_node(pair.into_inner().next().unwrap())?,
-        ))
+    fn build_const_exp(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        let line_col = pair.line_col();
+        let inner = AstNodeInner::ConstExp(self.build_ast_node(pair.into_inner().next().unwrap())?);
+        Ok(AstNode { inner, line_col })
     }
 
     fn display_ast_inner(pair: pest::iterators::Pair<Rule>, prefix: String, is_last: bool) {
@@ -818,7 +849,7 @@ fn pest_message_to_expecting(variant: &ErrorVariant<Rule>) -> String {
     }
 }
 
-pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNodeInner>, String> {
+pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNode>, String> {
     let mut ast_builder = AstBuilder::new(config);
     ast_builder.build(src)
 }

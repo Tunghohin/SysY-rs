@@ -74,6 +74,7 @@ prog = { SOI ~ CompUnit ~ EOI }
 CompUnit = { (FuncDef | Decl | TopError)+ }
 
 Decl = { ConstDecl | VarDecl }
+DeclError = @{ (!Semicolon ~ ANY)* ~ Semicolon }
 
 BType = @{ Int }
 
@@ -123,5 +124,3 @@ OrExp       = { AndExp ~ (Or ~ AndExp)* }
 ConstExp    = { AddExp }
 
 TopError = @{ (ANY)+ ~ EOI }
-DeclError = @{ (!Semicolon ~ ANY)* ~ Semicolon }
-StmtError = @{ (!(Semicolon | RBrace) ~ ANY)+ ~ (Semicolon)?}
