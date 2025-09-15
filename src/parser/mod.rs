@@ -2,6 +2,7 @@
 
 pub mod ast;
 pub mod semantic;
+pub mod symbol_table;
 
 use ast::AstNodeInner;
 use pest::{Parser, error::ErrorVariant, error::InputLocation, error::LineColLocation};
