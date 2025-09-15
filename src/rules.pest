@@ -74,9 +74,9 @@ prog = { SOI ~ CompUnit ~ EOI }
 CompUnit = { (FuncDef | Decl | TopError)+ }
 
 Decl = { ConstDecl | VarDecl }
-DeclError = @{ (!Semicolon ~ ANY)* ~ Semicolon }
+DeclError = { (!Semicolon ~ ANY)* ~ Semicolon }
 
-BType = @{ Int }
+BType = { Int }
 
 ConstDecl    = { Const ~ ((BType ~ ConstDef ~ (Comma ~ ConstDef)* ~ Semicolon) | DeclError) }
 ConstDef     = { Ident ~ (LBracket ~ ConstExp ~ RBracket)* ~ Assign ~ ConstInitVal }
@@ -105,7 +105,7 @@ Stmt = {
   | Return ~ (Exp)? ~ Semicolon
   | StmtError
 }
-StmtError = @{ (!(Semicolon | RBrace) ~ ANY)+ ~ (Semicolon)?}
+StmtError = { (!(Semicolon | RBrace) ~ ANY)+ ~ (Semicolon)?}
 
 Exp         = { Cond | AddExp }
 Cond        = { OrExp }
@@ -123,4 +123,4 @@ AndExp      = { EqExp ~ (And ~ EqExp)* }
 OrExp       = { AndExp ~ (Or ~ AndExp)* }
 ConstExp    = { AddExp }
 
-TopError = @{ (ANY)+ ~ EOI }
+TopError = { (ANY)+ ~ EOI }

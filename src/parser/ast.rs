@@ -5,8 +5,8 @@ use crate::parser::Rule;
 
 #[derive(Debug)]
 pub struct AstNode {
-    pub inner: AstNodeInner,
-    pub line_col: (usize, usize),
+    inner: AstNodeInner,
+    line_col: (usize, usize),
 }
 
 impl AstNode {
@@ -16,6 +16,10 @@ impl AstNode {
 
     pub fn as_inner(&self) -> &AstNodeInner {
         &self.inner
+    }
+
+    pub fn into_inner(self) -> AstNodeInner {
+        self.inner
     }
 }
 

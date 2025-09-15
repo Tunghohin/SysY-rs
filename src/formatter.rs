@@ -17,7 +17,7 @@ impl Formatter {
         }
     }
 
-    pub fn format_ast(&mut self, ast: &AstNodeInner) -> String {
+    pub fn format_ast(&mut self, ast: &AstNode) -> String {
         self.format_node(ast);
         self.output.trim_end().to_string()
     }
@@ -36,12 +36,12 @@ impl Formatter {
         self.output.push_str(s);
     }
 
-    fn format_node(&mut self, node: &AstNodeInner) {
-        match node {
+    fn format_node(&mut self, node: &AstNode) {
+        match node.as_inner() {
             AstNodeInner::CompUnit(children) => {
                 let mut first_line = true;
                 for (i, child) in children.iter().enumerate() {
-                    if let AstNodeInner::FuncDef { .. } = child.as_ref() {
+                    if let AstNodeInner::FuncDef { .. } = child.as_ref().as_inner() {
                         if !first_line {
                             self.write_newline();
                         }
@@ -417,7 +417,7 @@ impl Formatter {
                 self.write_str(")");
 
                 // 检查 then_stmt 是否是 Block
-                if let AstNodeInner::Stmt(inner_stmt) = then_stmt.as_ref() {
+                if let AstNodeInner::Stmt(inner_stmt) = then_stmt.as_ref().as_inner() {
                     if let StmtType::Block(_) = inner_stmt.as_ref() {
                         self.write_str(" ");
                         self.format_node(then_stmt);
@@ -441,7 +441,7 @@ impl Formatter {
                     self.write_indent();
                     self.write_str("else");
 
-                    if let AstNodeInner::Stmt(else_inner) = else_part.as_ref() {
+                    if let AstNodeInner::Stmt(else_inner) = else_part.as_ref().as_inner() {
                         match else_inner.as_ref() {
                             StmtType::If { .. } => {
                                 self.write_str(" ");
@@ -475,7 +475,7 @@ impl Formatter {
                 self.write_str(")");
 
                 // 检查 stmt 是否是 Block
-                if let AstNodeInner::Stmt(inner_stmt) = stmt.as_ref() {
+                if let AstNodeInner::Stmt(inner_stmt) = stmt.as_ref().as_inner() {
                     if let StmtType::Block(_) = inner_stmt.as_ref() {
                         self.write_str(" ");
                         self.format_node(stmt);
@@ -512,7 +512,7 @@ impl Formatter {
     }
 }
 
-pub fn format_ast(ast: &AstNodeInner) -> String {
+pub fn format_ast(ast: &AstNode) -> String {
     let mut formatter = Formatter::new();
     formatter.format_ast(ast)
 }
@@ -602,7 +602,7 @@ pub fn test_formatter() {
 
 #[test]
 pub fn test_single() {
-    let src = std::fs::read_to_string("./tests/parser/hack2.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/parser/func1.in").unwrap_or_default();
     match crate::parser::parse(&src, BuildConfig::default()) {
         Ok(root) => println!("{}", format_ast(&root)),
         Err(e) => {
