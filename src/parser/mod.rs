@@ -1,12 +1,15 @@
 #![allow(dead_code)]
 
 pub mod ast;
+pub mod semantic;
 
 use ast::AstNodeInner;
 use pest::{Parser, error::ErrorVariant, error::InputLocation, error::LineColLocation};
 use pest_derive::Parser;
 
 pub use ast::*;
+
+use crate::parser::semantic::SemanticChecker;
 
 #[derive(Parser)]
 #[grammar = "./rules.pest"]
