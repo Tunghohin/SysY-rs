@@ -21,6 +21,10 @@ impl AstNode {
     pub fn into_inner(self) -> AstNodeInner {
         self.inner
     }
+
+    pub fn line_col(&self) -> (usize, usize) {
+        self.line_col
+    }
 }
 
 #[derive(Debug)]

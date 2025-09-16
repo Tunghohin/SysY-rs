@@ -1,9 +1,9 @@
 use std::{env, fs};
 
+mod formatter;
 mod lexer;
 mod parser;
-
-mod formatter;
+mod semantic;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

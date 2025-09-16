@@ -1,16 +1,13 @@
 #![allow(dead_code)]
 
 pub mod ast;
-pub mod semantic;
-pub mod symbol_table;
 
+use crate::semantic::SemanticChecker;
 use ast::AstNodeInner;
-use pest::{Parser, error::ErrorVariant, error::InputLocation, error::LineColLocation};
+use pest::{Parser, error::ErrorVariant};
 use pest_derive::Parser;
 
 pub use ast::*;
-
-use crate::parser::semantic::SemanticChecker;
 
 #[derive(Parser)]
 #[grammar = "./rules.pest"]
@@ -41,6 +38,7 @@ impl ParseErrorCollector {
 pub struct AstBuilder {
     config: BuildConfig,
     error_collector: ParseErrorCollector,
+    semantic_checker: SemanticChecker,
 }
 
 impl AstBuilder {
@@ -48,6 +46,7 @@ impl AstBuilder {
         AstBuilder {
             config,
             error_collector: ParseErrorCollector::default(),
+            semantic_checker: SemanticChecker::default(),
         }
     }
 
@@ -62,7 +61,7 @@ impl AstBuilder {
                 .next()
                 .unwrap(),
         );
-        if self.error_collector.is_empty() {
+        if self.error_collector.is_empty() || !self.semantic_checker.has_error() {
             root
         } else {
             Err(self.error_collector.errors.join("\n"))
@@ -73,7 +72,7 @@ impl AstBuilder {
         &mut self,
         pair: pest::iterators::Pair<Rule>,
     ) -> Result<Box<AstNode>, String> {
-        match pair.as_rule() {
+        let node = match pair.as_rule() {
             Rule::Ident
             | Rule::Plus
             | Rule::Minus
@@ -153,7 +152,13 @@ impl AstBuilder {
                 Ok(Box::new(AstNode::new(inner, line_col)))
             }
             _ => Err(format!("Unexpected rule: {:?}", pair.as_rule())),
-        }
+        };
+
+        node.and_then(|node| {
+            self.semantic_checker.check(&node);
+            Ok(node)
+        })
+        .or_else(|e| Err(e))
     }
 
     fn build_comp_unit(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
@@ -418,6 +423,7 @@ impl AstBuilder {
     }
 
     fn build_block(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
+        self.semantic_checker.entry_scope();
         let line_col = pair.line_col();
         let inner = AstNodeInner::Block(
             pair.into_inner()
@@ -425,6 +431,7 @@ impl AstBuilder {
                 .map(|p| self.build_ast_node(p))
                 .collect::<Result<Vec<_>, _>>()?,
         );
+        self.semantic_checker.exit_scope();
         Ok(AstNode::new(inner, line_col))
     }
 
@@ -860,15 +867,13 @@ pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNode>, String> {
 }
 
 #[test]
-fn test_parser() {
+fn test_display_ast() {
     let src = std::fs::read_to_string("./tests/parser/func1.in").unwrap_or_default();
     let _ = display_ast(&src);
-    // match parse(&src, BuildConfig::default()) {
-    //     Ok(root) => {
-    //         println!("{:#?}", root);
-    //     }
-    //     Err(e) => {
-    //         println!("{}", e);
-    //     }
-    // };
+}
+
+#[test]
+fn test_semantic_single() {
+    let src = std::fs::read_to_string("./tests/semantic/sample1.in").unwrap_or_default();
+    parse(&src, BuildConfig::default()).expect("Failed to parse and build AST");
 }

@@ -1,12 +1,5 @@
-use crate::parser::semantic;
-use crate::parser::symbol_table::{SymbolTable, VariableMetadata};
-
-pub enum SemanticError {
-    UndefinedVariable,
-    UndefinedFunction,
-    RedefinedVariable,
-    RedefinedFunction,
-}
+use crate::semantic::SemanticError;
+use crate::semantic::symbol_table::{SymbolTable, VariableMetadata};
 
 #[derive(Debug, Clone)]
 pub struct Scope {
@@ -31,15 +24,15 @@ impl Scope {
         }
     }
 
-    fn define(
+    pub fn define(
         &mut self,
         name: &String,
         var_meta: VariableMetadata,
-    ) -> Result<(), semantic::SemanticError> {
+    ) -> Result<(), SemanticError> {
         self.symtb.define(name, var_meta)
     }
 
-    fn resove(&self, name: &String) -> Option<&VariableMetadata> {
+    pub fn resove(&self, name: &String) -> Option<&VariableMetadata> {
         if let Some(var) = self.symtb.resove(name) {
             Some(var)
         } else if let Some(ref parent) = self.parent {
@@ -52,26 +45,36 @@ impl Scope {
 
 #[derive(Debug)]
 pub struct ScopeStack {
-    stack: Vec<Scope>,
+    top: Option<Box<Scope>>,
+    len: usize,
 }
 
 impl Default for ScopeStack {
     fn default() -> Self {
-        Self {
-            stack: vec![Scope::default()],
-        }
+        let mut default = Self { top: None, len: 0 };
+        default.push(); // global scope
+        default
     }
 }
 
 impl ScopeStack {
-    fn push(&mut self) {
-        unimplemented!()
+    pub fn push(&mut self) {
+        self.top = Some(Box::new(Scope::new(self.top.take())));
+        self.len += 1;
+    }
+
+    pub fn pop(&mut self) {
+        self.top.take().map(|scope| {
+            self.top = scope.parent;
+            self.len -= 1;
+        });
+    }
+
+    pub fn peek(&self) -> Option<&Scope> {
+        self.top.as_deref()
+    }
+
+    pub fn peek_mut(&mut self) -> Option<&mut Scope> {
+        self.top.as_deref_mut()
     }
 }
-
-#[derive(Debug, Default)]
-pub struct SemanticChecker {
-    scope_stk: ScopeStack,
-}
-
-impl SemanticChecker {}

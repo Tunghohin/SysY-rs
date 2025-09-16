@@ -1,4 +1,4 @@
-use crate::parser::semantic;
+use crate::semantic;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,8 +22,6 @@ pub struct FunctionType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableMetadata {
     pub ty: Type,
-    pub addr: usize,
-    pub declpos: (usize, usize),
 }
 
 #[derive(Debug, Default, Clone)]
