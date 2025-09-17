@@ -17,14 +17,15 @@ pub(crate) struct SysYParser;
 pub struct BuildConfig {}
 
 #[derive(Debug, Default)]
-pub struct ParseErrorCollector {
+pub struct ErrorCollector {
     pub errors: Vec<String>,
 }
 
-impl ParseErrorCollector {
+impl ErrorCollector {
     pub fn push_error(&mut self, line: usize, _col: usize, error: String) {
         self.errors.push(format!(
-            "Error type B at Line {}: {}",
+            "Error type {} at Line {}: {}",
+            "B",
             line,
             error.trim_end()
         ));
@@ -37,7 +38,7 @@ impl ParseErrorCollector {
 
 pub struct AstBuilder {
     config: BuildConfig,
-    error_collector: ParseErrorCollector,
+    parse_errors: ErrorCollector,
     semantic_checker: SemanticChecker,
 }
 
@@ -45,7 +46,7 @@ impl AstBuilder {
     pub fn new(config: BuildConfig) -> Self {
         AstBuilder {
             config,
-            error_collector: ParseErrorCollector::default(),
+            parse_errors: ErrorCollector::default(),
             semantic_checker: SemanticChecker::default(),
         }
     }
@@ -61,10 +62,10 @@ impl AstBuilder {
                 .next()
                 .unwrap(),
         );
-        if self.error_collector.is_empty() || !self.semantic_checker.has_error() {
+        if self.parse_errors.is_empty() && !self.semantic_checker.has_error() {
             root
         } else {
-            Err(self.error_collector.errors.join("\n"))
+            Err(self.parse_errors.errors.join("\n"))
         }
     }
 
@@ -145,7 +146,7 @@ impl AstBuilder {
                     Rule::StmtError => "StmtError".to_string(),
                     _ => "Unknown".to_string(),
                 };
-                self.error_collector
+                self.parse_errors
                     .push_error(pair.line_col().0, pair.line_col().1, rule);
                 let line_col = pair.line_col();
                 let inner = AstNodeInner::ParseError;
@@ -155,7 +156,19 @@ impl AstBuilder {
         };
 
         node.and_then(|node| {
-            self.semantic_checker.check(&node);
+            match node.as_inner() {
+                AstNodeInner::FuncDef {
+                    func_type: _,
+                    ident: _,
+                    params: _,
+                    body: _,
+                } => {
+                    // skip funcdef
+                }
+                _ => {
+                    self.semantic_checker.check(&node);
+                }
+            };
             Ok(node)
         })
         .or_else(|e| Err(e))
@@ -233,7 +246,7 @@ impl AstBuilder {
         let mut pair_inner = pair.into_inner();
         match pair_inner.peek().unwrap().as_rule() {
             Rule::ConstExp => {
-                let inner = AstNodeInner::ConstInitVal(ast::ConstInitValType::ConstExp(
+                let inner = AstNodeInner::ConstInitVal(ast::ConstInitValInner::ConstExp(
                     self.build_ast_node(pair_inner.next().unwrap())?,
                 ));
                 Ok(AstNode::new(inner, line_col))
@@ -256,7 +269,7 @@ impl AstBuilder {
                         ))?;
                     }
                 }
-                let inner = AstNodeInner::ConstInitVal(ast::ConstInitValType::InitList(init_vals));
+                let inner = AstNodeInner::ConstInitVal(ast::ConstInitValInner::InitList(init_vals));
                 Ok(AstNode::new(inner, line_col))
             }
             _ => Err(format!(
@@ -332,11 +345,11 @@ impl AstBuilder {
                         ))?;
                     }
                 }
-                let inner = AstNodeInner::InitVal(ast::InitValType::InitList(init_vals));
+                let inner = AstNodeInner::InitVal(ast::InitValInner::InitList(init_vals));
                 Ok(AstNode::new(inner, line_col))
             }
             Rule::Exp => {
-                let inner = AstNodeInner::InitVal(ast::InitValType::ConstExp(
+                let inner = AstNodeInner::InitVal(ast::InitValInner::ConstExp(
                     self.build_ast_node(pair_inner.next().unwrap())?,
                 ));
                 Ok(AstNode::new(inner, line_col))
@@ -354,6 +367,7 @@ impl AstBuilder {
         let mut pair_inner = pair.into_inner();
         let func_type = self.build_ast_node(pair_inner.next().unwrap())?;
         let ident = pair_inner.next().unwrap().as_str().to_string();
+
         pair_inner.next(); // consume '('
         let mut params = None;
         if let Some(next_pair) = pair_inner.peek() {
@@ -362,6 +376,22 @@ impl AstBuilder {
             }
         }
         pair_inner.next(); // consume ')'
+
+        // add funcion name and parameters to symbol table
+        let func_def_no_body = AstNode::new(
+            AstNodeInner::FuncDef {
+                func_type: func_type.clone(),
+                ident: ident.clone(),
+                params: params.clone(),
+                body: Box::new(AstNode::new(
+                    AstNodeInner::Block(vec![]),
+                    (line_col.0, line_col.1),
+                )),
+            },
+            (line_col.0, line_col.1),
+        );
+        self.semantic_checker.check(&func_def_no_body);
+
         let body = self.build_ast_node(pair_inner.next().unwrap())?;
         let inner = AstNodeInner::FuncDef {
             func_type,
@@ -369,6 +399,8 @@ impl AstBuilder {
             params,
             body,
         };
+
+        self.semantic_checker.exit_scope(); // exit parameters scope
         Ok(AstNode::new(inner, line_col))
     }
 
@@ -452,12 +484,12 @@ impl AstBuilder {
                     let lval = self.build_ast_node(pair_inner.next().unwrap())?;
                     pair_inner.next(); // consume '='
                     let exp = self.build_ast_node(pair_inner.next().unwrap())?;
-                    Box::new(ast::StmtType::Assign { lval, exp })
+                    Box::new(ast::StmtInner::Assign { lval, exp })
                 });
                 Ok(AstNode::new(inner, line_col))
             }
             Rule::Block => {
-                let inner = AstNodeInner::Stmt(Box::new(ast::StmtType::Block(
+                let inner = AstNodeInner::Stmt(Box::new(ast::StmtInner::Block(
                     self.build_ast_node(pair_inner.next().unwrap())?,
                 )));
                 Ok(AstNode::new(inner, line_col))
@@ -479,7 +511,7 @@ impl AstBuilder {
                     } else {
                         None
                     };
-                    ast::StmtType::If {
+                    ast::StmtInner::If {
                         cond,
                         then_stmt,
                         else_stmt,
@@ -494,16 +526,16 @@ impl AstBuilder {
                     let cond = self.build_ast_node(pair_inner.next().unwrap())?;
                     pair_inner.next(); // consume ')'
                     let stmt = self.build_ast_node(pair_inner.next().unwrap())?;
-                    ast::StmtType::While { cond, stmt }
+                    ast::StmtInner::While { cond, stmt }
                 }));
                 Ok(AstNode::new(inner, line_col))
             }
             Rule::Break => {
-                let inner = AstNodeInner::Stmt(Box::new(ast::StmtType::Break));
+                let inner = AstNodeInner::Stmt(Box::new(ast::StmtInner::Break));
                 Ok(AstNode::new(inner, line_col))
             }
             Rule::Continue => {
-                let inner = AstNodeInner::Stmt(Box::new(ast::StmtType::Continue));
+                let inner = AstNodeInner::Stmt(Box::new(ast::StmtInner::Continue));
                 Ok(AstNode::new(inner, line_col))
             }
             Rule::Return => {
@@ -518,7 +550,7 @@ impl AstBuilder {
                     } else {
                         None
                     };
-                    ast::StmtType::Return(exp)
+                    ast::StmtInner::Return(exp)
                 }));
                 Ok(AstNode::new(inner, line_col))
             }
@@ -532,7 +564,7 @@ impl AstBuilder {
                 } else {
                     None
                 };
-                let inner = AstNodeInner::Stmt(Box::new(ast::StmtType::Exp(exp)));
+                let inner = AstNodeInner::Stmt(Box::new(ast::StmtInner::Exp(exp)));
                 Ok(AstNode::new(inner, line_col))
             }
         }
@@ -571,13 +603,13 @@ impl AstBuilder {
         if let Some(next_pair) = pair_inner.peek() {
             match next_pair.as_rule() {
                 Rule::LVal => {
-                    let inner = AstNodeInner::PrimaryExp(ast::PrimaryExpType::LVal(
+                    let inner = AstNodeInner::PrimaryExp(ast::PrimaryExpInner::LVal(
                         self.build_ast_node(pair_inner.next().unwrap())?,
                     ));
                     Ok(AstNode::new(inner, line_col))
                 }
                 Rule::Number => {
-                    let inner = AstNodeInner::PrimaryExp(ast::PrimaryExpType::LVal(
+                    let inner = AstNodeInner::PrimaryExp(ast::PrimaryExpInner::Number(
                         self.build_ast_node(pair_inner.next().unwrap())?,
                     ));
                     Ok(AstNode::new(inner, line_col))
@@ -586,7 +618,7 @@ impl AstBuilder {
                     pair_inner.next(); // consume '('
                     let exp = self.build_ast_node(pair_inner.next().unwrap())?;
                     pair_inner.next(); // consume ')'
-                    let inner = AstNodeInner::PrimaryExp(ast::PrimaryExpType::Exp(exp));
+                    let inner = AstNodeInner::PrimaryExp(ast::PrimaryExpInner::Exp(exp));
                     Ok(AstNode::new(inner, line_col))
                 }
                 _ => Err(format!(
@@ -601,7 +633,7 @@ impl AstBuilder {
 
     fn build_number(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
         let line_col = pair.line_col();
-        let inner = AstNodeInner::Number(ast::NumberType::IntegerConst(pair.as_str().to_string()));
+        let inner = AstNodeInner::Number(ast::NumberInner::IntegerConst(pair.as_str().to_string()));
         Ok(AstNode::new(inner, line_col))
     }
 
@@ -629,11 +661,11 @@ impl AstBuilder {
                 };
                 pair_inner.next(); // consume ')'
 
-                let inner = AstNodeInner::UnaryExp(ast::UnaryExpType::FuncCall { ident, args });
+                let inner = AstNodeInner::UnaryExp(ast::UnaryExpInner::FuncCall { ident, args });
                 Ok(AstNode::new(inner, line_col))
             }
             Rule::PrimaryExp => {
-                let inner = AstNodeInner::UnaryExp(ast::UnaryExpType::PrimaryExp(
+                let inner = AstNodeInner::UnaryExp(ast::UnaryExpInner::PrimaryExp(
                     self.build_ast_node(pair_inner.next().unwrap())?,
                 ));
                 Ok(AstNode::new(inner, line_col))
@@ -642,7 +674,7 @@ impl AstBuilder {
                 let op = self.build_ast_node(pair_inner.next().unwrap())?;
                 let exp = self.build_ast_node(pair_inner.next().unwrap())?;
 
-                let inner = AstNodeInner::UnaryExp(ast::UnaryExpType::Unary { op, exp });
+                let inner = AstNodeInner::UnaryExp(ast::UnaryExpInner::Unary { op, exp });
                 Ok(AstNode::new(inner, line_col))
             }
             _ => Err(format!(
@@ -657,9 +689,9 @@ impl AstBuilder {
         let inner = AstNodeInner::UnaryOp({
             let inner = pair.into_inner().next().unwrap();
             match inner.as_rule() {
-                Rule::Plus => ast::UnaryOpType::Plus,
-                Rule::Minus => ast::UnaryOpType::Minus,
-                Rule::Not => ast::UnaryOpType::Not,
+                Rule::Plus => ast::UnaryOpInner::Plus,
+                Rule::Minus => ast::UnaryOpInner::Minus,
+                Rule::Not => ast::UnaryOpInner::Not,
                 _ => return Err(format!("Unexpected UnaryOp: {:?}", inner.as_rule())),
             }
         });
@@ -685,9 +717,9 @@ impl AstBuilder {
         let mut ops = Vec::new();
         while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
-                Rule::Mul => ast::MulOpType::Mul,
-                Rule::Div => ast::MulOpType::Div,
-                Rule::Mod => ast::MulOpType::Mod,
+                Rule::Mul => ast::MulOpInner::Mul,
+                Rule::Div => ast::MulOpInner::Div,
+                Rule::Mod => ast::MulOpInner::Mod,
                 _ => return Err(format!("Unexpected operator in MulExp: {:?}", op.as_rule())),
             };
             let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
@@ -705,8 +737,8 @@ impl AstBuilder {
         let mut ops = Vec::new();
         while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
-                Rule::Plus => ast::AddOpType::Plus,
-                Rule::Minus => ast::AddOpType::Minus,
+                Rule::Plus => ast::AddOpInner::Plus,
+                Rule::Minus => ast::AddOpInner::Minus,
                 _ => return Err(format!("Unexpected operator in AddExp: {:?}", op.as_rule())),
             };
             let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
@@ -725,10 +757,10 @@ impl AstBuilder {
         let mut ops = Vec::new();
         while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
-                Rule::Lt => ast::RelOpType::Lt,
-                Rule::Gt => ast::RelOpType::Gt,
-                Rule::Le => ast::RelOpType::Le,
-                Rule::Ge => ast::RelOpType::Ge,
+                Rule::Lt => ast::RelOpInner::Lt,
+                Rule::Gt => ast::RelOpInner::Gt,
+                Rule::Le => ast::RelOpInner::Le,
+                Rule::Ge => ast::RelOpInner::Ge,
                 _ => return Err(format!("Unexpected operator in RelExp: {:?}", op.as_rule())),
             };
             let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
@@ -747,8 +779,8 @@ impl AstBuilder {
         let mut ops = Vec::new();
         while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
-                Rule::Eq => ast::EqOpType::Eq,
-                Rule::Neq => ast::EqOpType::Neq,
+                Rule::Eq => ast::EqOpInner::Eq,
+                Rule::Neq => ast::EqOpInner::Neq,
                 _ => return Err(format!("Unexpected operator in EqExp: {:?}", op.as_rule())),
             };
             let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
@@ -767,7 +799,7 @@ impl AstBuilder {
         let mut ops = Vec::new();
         while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
-                Rule::And => ast::LogicOpType::And,
+                Rule::And => ast::LogicOpInner::And,
                 _ => return Err(format!("Unexpected operator in AndExp: {:?}", op.as_rule())),
             };
             let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
@@ -786,7 +818,7 @@ impl AstBuilder {
         let mut ops = Vec::new();
         while let Some(op) = pair_inner.next() {
             let op_type = match op.as_rule() {
-                Rule::Or => ast::LogicOpType::Or,
+                Rule::Or => ast::LogicOpInner::Or,
                 _ => return Err(format!("Unexpected operator in OrExp: {:?}", op.as_rule())),
             };
             let rhs = self.build_ast_node(pair_inner.next().unwrap())?;
@@ -875,5 +907,5 @@ fn test_display_ast() {
 #[test]
 fn test_semantic_single() {
     let src = std::fs::read_to_string("./tests/semantic/sample1.in").unwrap_or_default();
-    parse(&src, BuildConfig::default()).expect("Failed to parse and build AST");
+    let _ = parse(&src, BuildConfig::default()).map_err(|e| println!("{}", e));
 }

@@ -89,10 +89,10 @@ impl Formatter {
             }
 
             AstNodeInner::ConstInitVal(init_val_type) => match init_val_type {
-                ConstInitValType::ConstExp(exp) => {
+                ConstInitValInner::ConstExp(exp) => {
                     self.format_node(exp);
                 }
-                ConstInitValType::InitList(list) => {
+                ConstInitValInner::InitList(list) => {
                     self.write_str("{");
                     for (i, item) in list.iter().enumerate() {
                         if i > 0 {
@@ -134,10 +134,10 @@ impl Formatter {
             }
 
             AstNodeInner::InitVal(init_val_type) => match init_val_type {
-                InitValType::ConstExp(exp) => {
+                InitValInner::ConstExp(exp) => {
                     self.format_node(exp);
                 }
-                InitValType::InitList(list) => {
+                InitValInner::InitList(list) => {
                     self.write_str("{");
                     for (i, item) in list.iter().enumerate() {
                         if i > 0 {
@@ -247,27 +247,27 @@ impl Formatter {
             }
 
             AstNodeInner::PrimaryExp(primary_type) => match primary_type {
-                PrimaryExpType::Exp(exp) => {
+                PrimaryExpInner::Exp(exp) => {
                     self.write_str("(");
                     self.format_node(exp);
                     self.write_str(")");
                 }
-                PrimaryExpType::LVal(lval) => {
+                PrimaryExpInner::LVal(lval) => {
                     self.format_node(lval);
                 }
-                PrimaryExpType::Number(number) => {
+                PrimaryExpInner::Number(number) => {
                     self.format_node(number);
                 }
             },
 
             AstNodeInner::Number(number_type) => match number_type {
-                NumberType::IntegerConst(value) => {
+                NumberInner::IntegerConst(value) => {
                     write!(self.output, "{}", value).unwrap();
                 }
             },
 
             AstNodeInner::UnaryExp(unary_type) => match unary_type {
-                UnaryExpType::FuncCall { ident, args } => {
+                UnaryExpInner::FuncCall { ident, args } => {
                     self.write_str(ident);
                     self.write_str("(");
                     if let Some(arg_list) = args {
@@ -280,19 +280,19 @@ impl Formatter {
                     }
                     self.write_str(")");
                 }
-                UnaryExpType::PrimaryExp(primary) => {
+                UnaryExpInner::PrimaryExp(primary) => {
                     self.format_node(primary);
                 }
-                UnaryExpType::Unary { op, exp } => {
+                UnaryExpInner::Unary { op, exp } => {
                     self.format_node(op);
                     self.format_node(exp);
                 }
             },
 
             AstNodeInner::UnaryOp(op_type) => match op_type {
-                UnaryOpType::Plus => self.write_str("+"),
-                UnaryOpType::Minus => self.write_str("-"),
-                UnaryOpType::Not => self.write_str("!"),
+                UnaryOpInner::Plus => self.write_str("+"),
+                UnaryOpInner::Minus => self.write_str("-"),
+                UnaryOpInner::Not => self.write_str("!"),
             },
 
             AstNodeInner::FuncRParams(args) => {
@@ -309,9 +309,9 @@ impl Formatter {
                 for (op, rhs) in ops {
                     self.write_str(" ");
                     match op {
-                        MulOpType::Mul => self.write_str("*"),
-                        MulOpType::Div => self.write_str("/"),
-                        MulOpType::Mod => self.write_str("%"),
+                        MulOpInner::Mul => self.write_str("*"),
+                        MulOpInner::Div => self.write_str("/"),
+                        MulOpInner::Mod => self.write_str("%"),
                     }
                     self.write_str(" ");
                     self.format_node(rhs);
@@ -323,8 +323,8 @@ impl Formatter {
                 for (op, rhs) in ops {
                     self.write_str(" ");
                     match op {
-                        AddOpType::Plus => self.write_str("+"),
-                        AddOpType::Minus => self.write_str("-"),
+                        AddOpInner::Plus => self.write_str("+"),
+                        AddOpInner::Minus => self.write_str("-"),
                     }
                     self.write_str(" ");
                     self.format_node(rhs);
@@ -336,10 +336,10 @@ impl Formatter {
                 for (op, rhs) in ops {
                     self.write_str(" ");
                     match op {
-                        RelOpType::Lt => self.write_str("<"),
-                        RelOpType::Gt => self.write_str(">"),
-                        RelOpType::Le => self.write_str("<="),
-                        RelOpType::Ge => self.write_str(">="),
+                        RelOpInner::Lt => self.write_str("<"),
+                        RelOpInner::Gt => self.write_str(">"),
+                        RelOpInner::Le => self.write_str("<="),
+                        RelOpInner::Ge => self.write_str(">="),
                     }
                     self.write_str(" ");
                     self.format_node(rhs);
@@ -351,8 +351,8 @@ impl Formatter {
                 for (op, rhs) in ops {
                     self.write_str(" ");
                     match op {
-                        EqOpType::Eq => self.write_str("=="),
-                        EqOpType::Neq => self.write_str("!="),
+                        EqOpInner::Eq => self.write_str("=="),
+                        EqOpInner::Neq => self.write_str("!="),
                     }
                     self.write_str(" ");
                     self.format_node(rhs);
@@ -387,27 +387,27 @@ impl Formatter {
         }
     }
 
-    fn format_stmt_type(&mut self, stmt: &StmtType) {
+    fn format_stmt_type(&mut self, stmt: &StmtInner) {
         match stmt {
-            StmtType::Assign { lval, exp } => {
+            StmtInner::Assign { lval, exp } => {
                 self.format_node(lval);
                 self.write_str(" = ");
                 self.format_node(exp);
                 self.write_str(";");
             }
 
-            StmtType::Exp(exp_opt) => {
+            StmtInner::Exp(exp_opt) => {
                 if let Some(exp) = exp_opt {
                     self.format_node(exp);
                 }
                 self.write_str(";");
             }
 
-            StmtType::Block(block) => {
+            StmtInner::Block(block) => {
                 self.format_node(block);
             }
 
-            StmtType::If {
+            StmtInner::If {
                 cond,
                 then_stmt,
                 else_stmt,
@@ -418,7 +418,7 @@ impl Formatter {
 
                 // 检查 then_stmt 是否是 Block
                 if let AstNodeInner::Stmt(inner_stmt) = then_stmt.as_ref().as_inner() {
-                    if let StmtType::Block(_) = inner_stmt.as_ref() {
+                    if let StmtInner::Block(_) = inner_stmt.as_ref() {
                         self.write_str(" ");
                         self.format_node(then_stmt);
                     } else {
@@ -443,11 +443,11 @@ impl Formatter {
 
                     if let AstNodeInner::Stmt(else_inner) = else_part.as_ref().as_inner() {
                         match else_inner.as_ref() {
-                            StmtType::If { .. } => {
+                            StmtInner::If { .. } => {
                                 self.write_str(" ");
                                 self.format_stmt_type(else_inner);
                             }
-                            StmtType::Block(_) => {
+                            StmtInner::Block(_) => {
                                 self.write_str(" ");
                                 self.format_node(else_part);
                             }
@@ -469,14 +469,14 @@ impl Formatter {
                 }
             }
 
-            StmtType::While { cond, stmt } => {
+            StmtInner::While { cond, stmt } => {
                 self.write_str("while (");
                 self.format_node(cond);
                 self.write_str(")");
 
                 // 检查 stmt 是否是 Block
                 if let AstNodeInner::Stmt(inner_stmt) = stmt.as_ref().as_inner() {
-                    if let StmtType::Block(_) = inner_stmt.as_ref() {
+                    if let StmtInner::Block(_) = inner_stmt.as_ref() {
                         self.write_str(" ");
                         self.format_node(stmt);
                     } else {
@@ -491,15 +491,15 @@ impl Formatter {
                 }
             }
 
-            StmtType::Break => {
+            StmtInner::Break => {
                 self.write_str("break;");
             }
 
-            StmtType::Continue => {
+            StmtInner::Continue => {
                 self.write_str("continue;");
             }
 
-            StmtType::Return(exp_opt) => {
+            StmtInner::Return(exp_opt) => {
                 if let Some(exp) = exp_opt {
                     self.write_str("return ");
                     self.format_node(exp);

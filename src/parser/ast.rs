@@ -3,7 +3,7 @@
 use crate::parser::Parser;
 use crate::parser::Rule;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AstNode {
     inner: AstNodeInner,
     line_col: (usize, usize),
@@ -27,7 +27,7 @@ impl AstNode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AstNodeInner {
     CompUnit(Vec<Box<AstNode>>),
 
@@ -44,7 +44,7 @@ pub enum AstNodeInner {
         dimensions: Vec<Box<AstNode>>,
         init_val: Box<AstNode>,
     },
-    ConstInitVal(ConstInitValType),
+    ConstInitVal(ConstInitValInner),
 
     VarDecl {
         btype: Box<AstNode>,
@@ -55,7 +55,7 @@ pub enum AstNodeInner {
         dimensions: Vec<Box<AstNode>>,
         init_val: Option<Box<AstNode>>,
     },
-    InitVal(InitValType),
+    InitVal(InitValInner),
 
     FuncDef {
         func_type: Box<AstNode>,
@@ -75,7 +75,7 @@ pub enum AstNodeInner {
     Block(Vec<Box<AstNode>>),
     BlockItem(Box<AstNode>),
 
-    Stmt(Box<StmtType>),
+    Stmt(Box<StmtInner>),
 
     Exp(Box<AstNode>),
     Cond(Box<AstNode>),
@@ -83,41 +83,41 @@ pub enum AstNodeInner {
         ident: String,
         dimensions: Vec<Box<AstNode>>,
     },
-    PrimaryExp(PrimaryExpType),
-    Number(NumberType),
-    UnaryExp(UnaryExpType),
-    UnaryOp(UnaryOpType),
+    PrimaryExp(PrimaryExpInner),
+    Number(NumberInner),
+    UnaryExp(UnaryExpInner),
+    UnaryOp(UnaryOpInner),
     FuncRParams(Vec<Box<AstNode>>),
     MulExp {
         lhs: Box<AstNode>,
-        ops: Vec<(MulOpType, Box<AstNode>)>,
+        ops: Vec<(MulOpInner, Box<AstNode>)>,
     },
     AddExp {
         lhs: Box<AstNode>,
-        ops: Vec<(AddOpType, Box<AstNode>)>,
+        ops: Vec<(AddOpInner, Box<AstNode>)>,
     },
     RelExp {
         lhs: Box<AstNode>,
-        ops: Vec<(RelOpType, Box<AstNode>)>,
+        ops: Vec<(RelOpInner, Box<AstNode>)>,
     },
     EqExp {
         lhs: Box<AstNode>,
-        ops: Vec<(EqOpType, Box<AstNode>)>,
+        ops: Vec<(EqOpInner, Box<AstNode>)>,
     },
     AndExp {
         lhs: Box<AstNode>,
-        ops: Vec<(LogicOpType, Box<AstNode>)>,
+        ops: Vec<(LogicOpInner, Box<AstNode>)>,
     },
     OrExp {
         lhs: Box<AstNode>,
-        ops: Vec<(LogicOpType, Box<AstNode>)>,
+        ops: Vec<(LogicOpInner, Box<AstNode>)>,
     },
     ConstExp(Box<AstNode>),
     ParseError,
 }
 
-#[derive(Debug)]
-pub enum UnaryExpType {
+#[derive(Debug, Clone)]
+pub enum UnaryExpInner {
     FuncCall {
         ident: String,
         args: Option<Vec<Box<AstNode>>>,
@@ -129,55 +129,55 @@ pub enum UnaryExpType {
     },
 }
 
-#[derive(Debug)]
-pub enum UnaryOpType {
+#[derive(Debug, Clone)]
+pub enum UnaryOpInner {
     Plus,
     Minus,
     Not,
 }
 
-#[derive(Debug)]
-pub enum MulOpType {
+#[derive(Debug, Clone)]
+pub enum MulOpInner {
     Mul,
     Div,
     Mod,
 }
 
-#[derive(Debug)]
-pub enum AddOpType {
+#[derive(Debug, Clone)]
+pub enum AddOpInner {
     Plus,
     Minus,
 }
 
-#[derive(Debug)]
-pub enum RelOpType {
+#[derive(Debug, Clone)]
+pub enum RelOpInner {
     Lt,
     Gt,
     Le,
     Ge,
 }
 
-#[derive(Debug)]
-pub enum EqOpType {
+#[derive(Debug, Clone)]
+pub enum EqOpInner {
     Eq,
     Neq,
 }
 
-#[derive(Debug)]
-pub enum LogicOpType {
+#[derive(Debug, Clone)]
+pub enum LogicOpInner {
     And,
     Or,
 }
 
-#[derive(Debug)]
-pub enum PrimaryExpType {
+#[derive(Debug, Clone)]
+pub enum PrimaryExpInner {
     Exp(Box<AstNode>),
     LVal(Box<AstNode>),
     Number(Box<AstNode>),
 }
 
-#[derive(Debug)]
-pub enum StmtType {
+#[derive(Debug, Clone)]
+pub enum StmtInner {
     Assign {
         lval: Box<AstNode>,
         exp: Box<AstNode>,
@@ -198,19 +198,19 @@ pub enum StmtType {
     Return(Option<Box<AstNode>>),
 }
 
-#[derive(Debug)]
-pub enum ConstInitValType {
+#[derive(Debug, Clone)]
+pub enum ConstInitValInner {
     ConstExp(Box<AstNode>),
     InitList(Vec<Box<AstNode>>),
 }
 
-#[derive(Debug)]
-pub enum InitValType {
+#[derive(Debug, Clone)]
+pub enum InitValInner {
     ConstExp(Box<AstNode>),
     InitList(Vec<Box<AstNode>>),
 }
 
-#[derive(Debug)]
-pub enum NumberType {
+#[derive(Debug, Clone)]
+pub enum NumberInner {
     IntegerConst(String),
 }

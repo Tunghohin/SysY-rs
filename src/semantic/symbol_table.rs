@@ -4,6 +4,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Int,
+    Void,
     Array(ArrayType),
     Function(FunctionType),
 }
@@ -37,7 +38,9 @@ impl SymbolTable {
     ) -> Result<(), semantic::SemanticError> {
         if self.meta.contains_key(name) {
             match var_meta.ty {
-                Type::Int | Type::Array(_) => Err(semantic::SemanticError::RedefinedVariable),
+                Type::Int | Type::Array(_) | Type::Void => {
+                    Err(semantic::SemanticError::RedefinedVariable)
+                }
                 Type::Function(_) => Err(semantic::SemanticError::RedefinedFunction),
             }
         } else {
