@@ -18,7 +18,7 @@ pub struct BuildConfig {}
 
 #[derive(Debug, Default)]
 pub struct ErrorCollector {
-    pub errors: Vec<String>,
+    errors: Vec<String>,
 }
 
 impl ErrorCollector {
@@ -33,6 +33,14 @@ impl ErrorCollector {
 
     pub fn is_empty(&self) -> bool {
         self.errors.is_empty()
+    }
+
+    pub fn has_error(&self) -> bool {
+        !self.errors.is_empty()
+    }
+
+    pub fn take_errors(&mut self) -> Vec<String> {
+        std::mem::replace(&mut self.errors, Vec::new())
     }
 }
 
@@ -62,11 +70,13 @@ impl AstBuilder {
                 .next()
                 .unwrap(),
         );
-        if self.parse_errors.is_empty() && !self.semantic_checker.has_error() {
-            root
-        } else {
-            Err(self.parse_errors.errors.join("\n"))
+        if self.parse_errors.has_error() {
+            return Err(self.parse_errors.take_errors().join("\n"));
         }
+        if self.semantic_checker.has_error() {
+            return Err(self.semantic_checker.take_errors().join("\n"));
+        }
+        root
     }
 
     fn build_ast_node(
@@ -165,6 +175,12 @@ impl AstBuilder {
                 } => {
                     // skip funcdef
                 }
+                // AstNodeInner::Cond(_) => {
+                //     self.semantic_checker.check(&node);
+                // }
+                // AstNodeInner::Exp(_) => {
+                //     self.semantic_checker.check(&node);
+                // }
                 _ => {
                     self.semantic_checker.check(&node);
                 }
@@ -900,7 +916,7 @@ pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNode>, String> {
 
 #[test]
 fn test_display_ast() {
-    let src = std::fs::read_to_string("./tests/parser/func1.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/semantic/sample1.in").unwrap_or_default();
     let _ = display_ast(&src);
 }
 

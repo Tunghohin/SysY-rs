@@ -6,37 +6,38 @@ use crate::parser::{BuildConfig, display_ast, parse};
 use crate::semantic::scope::{Scope, ScopeStack};
 use crate::semantic::symbol_table::{SymbolTable, Type, VariableMetadata};
 use std::io::Write;
+use std::process::id;
 
 #[allow(unused)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum SemanticError {
-    UndefinedVariable,
-    UndefinedFunction,
-    RedefinedVariable,
-    RedefinedFunction,
+    UndefinedVariable(String),
+    UndefinedFunction(String),
+    RedefinedVariable(String),
+    RedefinedFunction(String),
     TypeMismatchedForAssignment,
     TypeMismatchedForOperands,
     TypeMismatchedForReturn,
-    FunctionArgTypeMismatched,
-    NotAnArray,
-    NotAFunction,
-    NotALValue,
+    FunctionArgTypeMismatched(String),
+    NotAnArray(String),
+    NotAFunction(String),
+    NotALValue(String),
 }
 
 impl Into<i32> for SemanticError {
     fn into(self) -> i32 {
         match self {
-            SemanticError::UndefinedVariable => 1,
-            SemanticError::UndefinedFunction => 2,
-            SemanticError::RedefinedVariable => 3,
-            SemanticError::RedefinedFunction => 4,
+            SemanticError::UndefinedVariable(_) => 1,
+            SemanticError::UndefinedFunction(_) => 2,
+            SemanticError::RedefinedVariable(_) => 3,
+            SemanticError::RedefinedFunction(_) => 4,
             SemanticError::TypeMismatchedForAssignment => 5,
             SemanticError::TypeMismatchedForOperands => 6,
             SemanticError::TypeMismatchedForReturn => 7,
-            SemanticError::FunctionArgTypeMismatched => 8,
-            SemanticError::NotAnArray => 9,
-            SemanticError::NotAFunction => 10,
-            SemanticError::NotALValue => 11,
+            SemanticError::FunctionArgTypeMismatched(_) => 8,
+            SemanticError::NotAnArray(_) => 9,
+            SemanticError::NotAFunction(_) => 10,
+            SemanticError::NotALValue(_) => 11,
         }
     }
 }
@@ -44,21 +45,21 @@ impl Into<i32> for SemanticError {
 impl Into<String> for SemanticError {
     fn into(self) -> String {
         match self {
-            SemanticError::UndefinedVariable => "Undefined variable".to_string(),
-            SemanticError::UndefinedFunction => "Undefined function".to_string(),
-            SemanticError::RedefinedVariable => "Redefined variable".to_string(),
-            SemanticError::RedefinedFunction => "Redefined function".to_string(),
+            SemanticError::UndefinedVariable(name) => format!("Undefined variable '{}'.", name),
+            SemanticError::UndefinedFunction(name) => format!("Undefined function '{}'.", name),
+            SemanticError::RedefinedVariable(name) => format!("Redefined variable '{}'.", name),
+            SemanticError::RedefinedFunction(name) => format!("Redefined function '{}'.", name),
             SemanticError::TypeMismatchedForAssignment => {
-                "Type mismatched for assignment".to_string()
+                "Type mismatched for assignment.".to_string()
             }
-            SemanticError::TypeMismatchedForOperands => "Type mismatched for operands".to_string(),
-            SemanticError::TypeMismatchedForReturn => "Type mismatched for return".to_string(),
-            SemanticError::FunctionArgTypeMismatched => {
-                "Function argument type mismatched".to_string()
+            SemanticError::TypeMismatchedForOperands => "Type mismatched for operands.".to_string(),
+            SemanticError::TypeMismatchedForReturn => "Type mismatched for return.".to_string(),
+            SemanticError::FunctionArgTypeMismatched(name) => {
+                format!("Function '{}' argument type mismatched.", name)
             }
-            SemanticError::NotAnArray => "Not an array".to_string(),
-            SemanticError::NotAFunction => "Not a function".to_string(),
-            SemanticError::NotALValue => "Not an lvalue".to_string(),
+            SemanticError::NotAnArray(name) => format!("'{}' is not an array.", name),
+            SemanticError::NotAFunction(name) => format!("'{}' is not a function.", name),
+            SemanticError::NotALValue(name) => format!("'{}' is not a lvalue.", name),
         }
     }
 }
@@ -82,11 +83,8 @@ impl SemanticChecker {
         !self.errors.is_empty()
     }
 
-    pub fn resove(&self, name: &String) -> Option<&VariableMetadata> {
-        self.scope_stk
-            .peek()
-            .unwrap_or_else(|| unreachable!())
-            .resove(name)
+    pub fn take_errors(&mut self) -> Vec<String> {
+        std::mem::replace(&mut self.errors, Vec::new())
     }
 
     // maybe using cache to store inferred types to optimize performance
@@ -106,7 +104,7 @@ impl SemanticChecker {
                         .unwrap_or_else(|| unreachable!())
                         .resove(&ident)
                         .map_or_else(
-                            || Err(SemanticError::UndefinedVariable),
+                            || Err(SemanticError::UndefinedVariable(ident.clone())),
                             |meta| Ok(meta.ty.clone()),
                         ),
                     _ => unreachable!(),
@@ -120,7 +118,7 @@ impl SemanticChecker {
                     .unwrap_or_else(|| unreachable!())
                     .resove(&ident)
                     .map_or_else(
-                        || Err(SemanticError::UndefinedFunction),
+                        || Err(SemanticError::UndefinedFunction(ident.clone())),
                         |meta| Ok(meta.ty.clone()),
                     ),
                 ast::UnaryExpInner::Unary { op: _, exp } => match self.type_inference(exp)? {
@@ -194,7 +192,8 @@ impl SemanticChecker {
         }
     }
 
-    pub fn check(&mut self, node: &AstNode) {
+    pub fn check(&mut self, node: &AstNode) -> Result<(), Vec<SemanticError>> {
+        let mut errors = Vec::new();
         // Implement semantic checks here
         match node.as_inner() {
             AstNodeInner::ConstDecl {
@@ -224,11 +223,7 @@ impl SemanticChecker {
                                     },
                                 )
                                 .map_err(|e| {
-                                    self.push_error(
-                                        e.clone().into(),
-                                        node.line_col().0,
-                                        Some(e.into()),
-                                    )
+                                    errors.push(e);
                                 });
                         }
                         _ => {
@@ -261,11 +256,7 @@ impl SemanticChecker {
                                     },
                                 )
                                 .map_err(|e| {
-                                    self.push_error(
-                                        e.clone().into(),
-                                        node.line_col().0,
-                                        Some(e.into()),
-                                    )
+                                    errors.push(e);
                                 });
                         }
                         _ => {
@@ -301,7 +292,7 @@ impl SemanticChecker {
                         },
                     )
                     .map_err(|e| {
-                        self.push_error(e.clone().into(), node.line_col().0, Some(e.into()))
+                        errors.push(e);
                     });
 
                 // entry parameters scope
@@ -313,7 +304,7 @@ impl SemanticChecker {
             } => {
                 if let Some(scope) = self.scope_stk.peek() {
                     if scope.resove(ident).is_none() {
-                        let e = SemanticError::UndefinedVariable;
+                        let e = SemanticError::UndefinedVariable(ident.clone());
                         self.push_error(e.clone().into(), node.line_col().0, Some(e.into()))
                     }
                 }
@@ -322,10 +313,16 @@ impl SemanticChecker {
             | AstNodeInner::ConstExp(exp_inner)
             | AstNodeInner::Cond(exp_inner) => {
                 let _ = self.type_inference(exp_inner).map_err(|e| {
-                    self.push_error(e.clone().into(), node.line_col().0, Some(e.into()))
+                    errors.push(e);
                 });
             }
             _ => {}
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
         }
     }
 

@@ -39,9 +39,9 @@ impl SymbolTable {
         if self.meta.contains_key(name) {
             match var_meta.ty {
                 Type::Int | Type::Array(_) | Type::Void => {
-                    Err(semantic::SemanticError::RedefinedVariable)
+                    Err(semantic::SemanticError::RedefinedVariable(name.clone()))
                 }
-                Type::Function(_) => Err(semantic::SemanticError::RedefinedFunction),
+                Type::Function(_) => Err(semantic::SemanticError::RedefinedFunction(name.clone())),
             }
         } else {
             self.meta.insert(name.clone(), var_meta);
