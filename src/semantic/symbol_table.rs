@@ -12,6 +12,7 @@ pub enum Type {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArrayType {
     pub ty: Box<Type>,
+    pub dimensions: Vec<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

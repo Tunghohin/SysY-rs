@@ -167,20 +167,15 @@ impl AstBuilder {
 
         node.and_then(|node| {
             match node.as_inner() {
+                AstNodeInner::Stmt(stmt_inner) => {}
                 AstNodeInner::FuncDef {
                     func_type: _,
                     ident: _,
                     params: _,
                     body: _,
                 } => {
-                    // skip funcdef
+                    // skip semantic check for function definition here, as it has been done before building body
                 }
-                // AstNodeInner::Cond(_) => {
-                //     self.semantic_checker.check(&node);
-                // }
-                // AstNodeInner::Exp(_) => {
-                //     self.semantic_checker.check(&node);
-                // }
                 _ => {
                     self.semantic_checker.check(&node);
                 }
