@@ -2,7 +2,7 @@
 
 pub mod ast;
 
-use crate::semantic::SemanticChecker;
+use crate::semantic::{self, SemanticChecker};
 use ast::AstNodeInner;
 use pest::{Parser, error::ErrorVariant};
 use pest_derive::Parser;
@@ -16,19 +16,31 @@ pub(crate) struct SysYParser;
 #[derive(Debug, Default)]
 pub struct BuildConfig {}
 
-#[derive(Debug, Default)]
-pub struct ErrorCollector {
+#[derive(Debug)]
+pub struct ErrorCollector<F, P>
+where
+    F: Fn(usize, &P) -> String,
+{
     errors: Vec<String>,
+    formatter: F,
+    _phantom: std::marker::PhantomData<P>,
 }
 
-impl ErrorCollector {
-    pub fn push_error(&mut self, line: usize, _col: usize, error: String) {
-        self.errors.push(format!(
-            "Error type {} at Line {}: {}",
-            "B",
-            line,
-            error.trim_end()
-        ));
+impl<F, P> ErrorCollector<F, P>
+where
+    F: Fn(usize, &P) -> String,
+{
+    pub fn new(formatter: F) -> Self {
+        Self {
+            errors: Vec::new(),
+            formatter,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    pub fn push_error(&mut self, line: usize, error: P) {
+        let msg = (self.formatter)(line, &error);
+        self.errors.push(msg);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -46,7 +58,9 @@ impl ErrorCollector {
 
 pub struct AstBuilder {
     config: BuildConfig,
-    parse_errors: ErrorCollector,
+    parse_errors: ErrorCollector<fn(usize, &String) -> String, String>,
+    semantic_errors:
+        ErrorCollector<fn(usize, &semantic::SemanticError) -> String, semantic::SemanticError>,
     semantic_checker: SemanticChecker,
 }
 
@@ -54,7 +68,14 @@ impl AstBuilder {
     pub fn new(config: BuildConfig) -> Self {
         AstBuilder {
             config,
-            parse_errors: ErrorCollector::default(),
+            parse_errors: ErrorCollector::new(|line, e| {
+                format!("Error type {} at Line {}: {}", "B", line, e.trim_end())
+            }),
+            semantic_errors: ErrorCollector::new(|line, e| {
+                let typeid: i32 = e.clone().into();
+                let msg: String = e.clone().into();
+                format!("Error type {} at Line {}: {}", typeid, line, msg)
+            }),
             semantic_checker: SemanticChecker::default(),
         }
     }
@@ -73,8 +94,8 @@ impl AstBuilder {
         if self.parse_errors.has_error() {
             return Err(self.parse_errors.take_errors().join("\n"));
         }
-        if self.semantic_checker.has_error() {
-            return Err(self.semantic_checker.take_errors().join("\n"));
+        if self.semantic_errors.has_error() {
+            return Err(self.semantic_errors.take_errors().join("\n"));
         }
         root
     }
@@ -156,10 +177,9 @@ impl AstBuilder {
                     Rule::StmtError => "StmtError".to_string(),
                     _ => "Unknown".to_string(),
                 };
-                self.parse_errors
-                    .push_error(pair.line_col().0, pair.line_col().1, rule);
                 let line_col = pair.line_col();
                 let inner = AstNodeInner::ParseError;
+                self.parse_errors.push_error(line_col.0, rule);
                 Ok(Box::new(AstNode::new(inner, line_col)))
             }
             _ => Err(format!("Unexpected rule: {:?}", pair.as_rule())),
@@ -167,7 +187,27 @@ impl AstBuilder {
 
         node.and_then(|node| {
             match node.as_inner() {
-                AstNodeInner::Stmt(stmt_inner) => {}
+                AstNodeInner::Stmt(_stmt_inner) => {
+                    if let Err(e) = self.semantic_checker.check(&node) {
+                        self.semantic_errors.push_error(node.line_col().0, e);
+                    }
+                }
+                AstNodeInner::ConstDecl {
+                    btype: _,
+                    const_defs: _,
+                } => {
+                    if let Err(e) = self.semantic_checker.check(&node) {
+                        self.semantic_errors.push_error(node.line_col().0, e);
+                    }
+                }
+                AstNodeInner::VarDecl {
+                    btype: _,
+                    var_defs: _,
+                } => {
+                    if let Err(e) = self.semantic_checker.check(&node) {
+                        self.semantic_errors.push_error(node.line_col().0, e);
+                    }
+                }
                 AstNodeInner::FuncDef {
                     func_type: _,
                     ident: _,
@@ -176,9 +216,7 @@ impl AstBuilder {
                 } => {
                     // skip semantic check for function definition here, as it has been done before building body
                 }
-                _ => {
-                    self.semantic_checker.check(&node);
-                }
+                _ => {}
             };
             Ok(node)
         })
@@ -389,20 +427,6 @@ impl AstBuilder {
         pair_inner.next(); // consume ')'
 
         // add funcion name and parameters to symbol table
-        let func_def_no_body = AstNode::new(
-            AstNodeInner::FuncDef {
-                func_type: func_type.clone(),
-                ident: ident.clone(),
-                params: params.clone(),
-                body: Box::new(AstNode::new(
-                    AstNodeInner::Block(vec![]),
-                    (line_col.0, line_col.1),
-                )),
-            },
-            (line_col.0, line_col.1),
-        );
-        self.semantic_checker.check(&func_def_no_body);
-
         let body = self.build_ast_node(pair_inner.next().unwrap())?;
         let inner = AstNodeInner::FuncDef {
             func_type,
@@ -411,7 +435,6 @@ impl AstBuilder {
             body,
         };
 
-        self.semantic_checker.exit_scope(); // exit parameters scope
         Ok(AstNode::new(inner, line_col))
     }
 

@@ -67,7 +67,6 @@ impl Into<String> for SemanticError {
 #[derive(Debug, Default)]
 pub struct SemanticChecker {
     scope_stk: ScopeStack,
-    errors: Vec<String>,
 }
 
 impl SemanticChecker {
@@ -77,14 +76,6 @@ impl SemanticChecker {
 
     pub fn exit_scope(&mut self) {
         self.scope_stk.pop();
-    }
-
-    pub fn has_error(&self) -> bool {
-        !self.errors.is_empty()
-    }
-
-    pub fn take_errors(&mut self) -> Vec<String> {
-        std::mem::replace(&mut self.errors, Vec::new())
     }
 
     // maybe using cache to store inferred types to optimize performance
@@ -192,13 +183,127 @@ impl SemanticChecker {
         }
     }
 
-    pub fn check(&mut self, node: &AstNode) -> Result<(), Vec<SemanticError>> {
-        let mut errors = Vec::new();
+    pub fn check(&mut self, node: &AstNode) -> Result<(), SemanticError> {
+        match node.as_inner() {
+            AstNodeInner::Stmt(stmt_inner) => match &**stmt_inner {
+                ast::StmtInner::Assign { lval, exp: _ } => {
+                    let ident = match lval.as_inner() {
+                        AstNodeInner::LVal {
+                            ident,
+                            dimensions: _,
+                        } => ident,
+                        _ => unreachable!(),
+                    };
+                    self.scope_stk
+                        .peek()
+                        .unwrap_or_else(|| unreachable!())
+                        .resove(ident)
+                        .map_or_else(
+                            || Err(SemanticError::UndefinedVariable(ident.clone())),
+                            |_| Ok(()),
+                        )
+                }
+                ast::StmtInner::Block(_block) => Ok(()),
+                ast::StmtInner::If {
+                    cond,
+                    then_stmt: _,
+                    else_stmt: _,
+                } => self
+                    .type_inference(cond)
+                    .map_or_else(|e| Err(e), |_| Ok(())),
+                ast::StmtInner::While { cond, stmt: _ } => self
+                    .type_inference(cond)
+                    .map_or_else(|e| Err(e), |_| Ok(())),
+                ast::StmtInner::Break | ast::StmtInner::Continue => Ok(()),
+                ast::StmtInner::Return(exp) | ast::StmtInner::Exp(exp) => {
+                    if let Some(exp) = exp {
+                        self.type_inference(exp).map_or_else(|e| Err(e), |_| Ok(()))
+                    } else {
+                        Ok(())
+                    }
+                }
+            },
+            AstNodeInner::ConstDecl { btype, const_defs } => {
+                let ty = match btype.as_inner() {
+                    AstNodeInner::BType(ty) => match ty.as_str() {
+                        "int" => Type::Int,
+                        "void" => Type::Void,
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                };
+                for def in const_defs {
+                    match def.as_inner() {
+                        AstNodeInner::VarDef {
+                            ident,
+                            dimensions,
+                            init_val: _,
+                        } => {
+                            let var_type = if dimensions.is_empty() {
+                                ty.clone()
+                            } else {
+                                Type::Array(symbol_table::ArrayType {
+                                    ty: Box::new(ty.clone()),
+                                    num_elements: None,
+                                })
+                            };
+                            let var_meta = VariableMetadata { ty: var_type };
+                            let res = self
+                                .scope_stk
+                                .peek_mut()
+                                .unwrap_or_else(|| unreachable!())
+                                .define(ident, var_meta);
+                            if res.is_err() {
+                                return Err(SemanticError::RedefinedVariable(ident.clone()));
+                            }
+                        }
+                        _ => unreachable!(),
+                    }
+                }
 
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
+                Ok(())
+            }
+            AstNodeInner::VarDecl { btype, var_defs } => {
+                let ty = match btype.as_inner() {
+                    AstNodeInner::BType(ty) => match ty.as_str() {
+                        "int" => Type::Int,
+                        "void" => Type::Void,
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                };
+                for def in var_defs {
+                    match def.as_inner() {
+                        AstNodeInner::VarDef {
+                            ident,
+                            dimensions,
+                            init_val: _,
+                        } => {
+                            let var_type = if dimensions.is_empty() {
+                                ty.clone()
+                            } else {
+                                Type::Array(symbol_table::ArrayType {
+                                    ty: Box::new(ty.clone()),
+                                    num_elements: None,
+                                })
+                            };
+                            let var_meta = VariableMetadata { ty: var_type };
+                            let res = self
+                                .scope_stk
+                                .peek_mut()
+                                .unwrap_or_else(|| unreachable!())
+                                .define(ident, var_meta);
+                            if res.is_err() {
+                                return Err(SemanticError::RedefinedVariable(ident.clone()));
+                            }
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+
+                Ok(())
+            }
+            _ => unreachable!(),
         }
     }
 }
