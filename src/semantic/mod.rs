@@ -86,31 +86,70 @@ impl SemanticChecker {
             AstNodeInner::PrimaryExp(primary_exp_inner) => match primary_exp_inner {
                 ast::PrimaryExpInner::Number(_) => Ok(Type::Int),
                 ast::PrimaryExpInner::LVal(lval) => match lval.as_inner() {
-                    AstNodeInner::LVal {
-                        ident,
-                        dimensions: _,
-                    } => self
+                    AstNodeInner::LVal { ident, dimensions } => self
                         .scope_stk
                         .peek()
                         .unwrap_or_else(|| unreachable!())
                         .resove(&ident)
                         .map_or_else(
                             || Err(SemanticError::UndefinedVariable(ident.clone())),
-                            |meta| Ok(meta.ty.clone()),
+                            |meta| {
+                                if dimensions.len() > 0 {
+                                    match &meta.ty {
+                                        Type::Array(array_type) => {
+                                            if dimensions.len() > 1 {
+                                                Ok(Type::Array(symbol_table::ArrayType {
+                                                    ty: array_type.ty.clone(),
+                                                    num_elements: None,
+                                                }))
+                                            } else {
+                                                Ok(*array_type.ty.clone())
+                                            }
+                                        }
+                                        _ => Err(SemanticError::NotAnArray(ident.clone())),
+                                    }
+                                } else {
+                                    Ok(meta.ty.clone())
+                                }
+                            },
                         ),
                     _ => unreachable!(),
                 },
                 ast::PrimaryExpInner::Exp(exp) => self.type_inference(exp),
             },
             AstNodeInner::UnaryExp(unary_exp_inner) => match unary_exp_inner {
-                ast::UnaryExpInner::FuncCall { ident, args: _ } => self
+                ast::UnaryExpInner::FuncCall { ident, args } => self
                     .scope_stk
                     .peek()
                     .unwrap_or_else(|| unreachable!())
                     .resove(&ident)
                     .map_or_else(
                         || Err(SemanticError::UndefinedFunction(ident.clone())),
-                        |meta| Ok(meta.ty.clone()),
+                        |meta| match &meta.ty {
+                            Type::Function(function_type) => {
+                                if let Some(args) = args {
+                                    if args.len() != function_type.params_ty.len() {
+                                        return Err(SemanticError::FunctionArgTypeMismatched(
+                                            ident.clone(),
+                                        ));
+                                    }
+                                    for (i, arg) in args.iter().enumerate() {
+                                        let arg_type = self.type_inference(arg)?;
+                                        if *function_type.params_ty[i] != arg_type {
+                                            return Err(SemanticError::FunctionArgTypeMismatched(
+                                                ident.clone(),
+                                            ));
+                                        }
+                                    }
+                                } else if !function_type.params_ty.is_empty() {
+                                    return Err(SemanticError::FunctionArgTypeMismatched(
+                                        ident.clone(),
+                                    ));
+                                }
+                                Ok(*function_type.ret_ty.clone())
+                            }
+                            _ => Err(SemanticError::NotAFunction(ident.clone())),
+                        },
                     ),
                 ast::UnaryExpInner::Unary { op: _, exp } => match self.type_inference(exp)? {
                     Type::Int => Ok(Type::Int),
@@ -186,7 +225,7 @@ impl SemanticChecker {
     pub fn check(&mut self, node: &AstNode) -> Result<(), SemanticError> {
         match node.as_inner() {
             AstNodeInner::Stmt(stmt_inner) => match &**stmt_inner {
-                ast::StmtInner::Assign { lval, exp: _ } => {
+                ast::StmtInner::Assign { lval, exp } => {
                     let ident = match lval.as_inner() {
                         AstNodeInner::LVal {
                             ident,
@@ -200,7 +239,21 @@ impl SemanticChecker {
                         .resove(ident)
                         .map_or_else(
                             || Err(SemanticError::UndefinedVariable(ident.clone())),
-                            |_| Ok(()),
+                            |var_meta| {
+                                self.type_inference(exp).map_or_else(
+                                    |e| Err(e),
+                                    |ty| {
+                                        if var_meta.ty != Type::Int {
+                                            return Err(SemanticError::NotALValue(ident.clone()));
+                                        }
+                                        if var_meta.ty != ty {
+                                            Err(SemanticError::TypeMismatchedForAssignment)
+                                        } else {
+                                            Ok(())
+                                        }
+                                    },
+                                )
+                            },
                         )
                 }
                 ast::StmtInner::Block(_block) => Ok(()),
@@ -217,7 +270,17 @@ impl SemanticChecker {
                 ast::StmtInner::Break | ast::StmtInner::Continue => Ok(()),
                 ast::StmtInner::Return(exp) | ast::StmtInner::Exp(exp) => {
                     if let Some(exp) = exp {
-                        self.type_inference(exp).map_or_else(|e| Err(e), |_| Ok(()))
+                        // WIP
+                        self.type_inference(exp).map_or_else(
+                            |e| Err(e),
+                            |ty| {
+                                if ty != Type::Int {
+                                    Err(SemanticError::TypeMismatchedForReturn)
+                                } else {
+                                    Ok(())
+                                }
+                            },
+                        )
                     } else {
                         Ok(())
                     }
