@@ -11,17 +11,11 @@ fn main() {
         eprintln!("Usage: {} <filename>", args[0]);
         std::process::exit(1);
     }
-    // let input = fs::read_to_string(&args[1]).expect("Failed to read file");
-
-    // println!(
-    //     "{}",
-    //     formatter::format_ast(
-    //         &crate::parser::parse(&input, crate::parser::BuildConfig::default()).unwrap_or_else(
-    //             |e| {
-    //                 println!("{}", e);
-    //                 panic!()
-    //             }
-    //         )
-    //     )
-    // );
+    let input = fs::read_to_string(&args[1]).expect("Failed to read file");
+    let _ = parser::parse(&input, parser::BuildConfig::default()).map_or_else(
+        |e| eprintln!("{}", e),
+        |_| {
+            eprintln!("No semantic errors in the program!");
+        },
+    );
 }

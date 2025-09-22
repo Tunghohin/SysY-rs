@@ -1050,12 +1050,12 @@ pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNode>, String> {
 
 #[test]
 fn test_display_ast() {
-    let src = std::fs::read_to_string("./tests/semantic/sample1.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/semantic/normal3.in").unwrap_or_default();
     let _ = display_ast(&src);
 }
 
 #[test]
 fn test_semantic_single() {
-    let src = std::fs::read_to_string("./tests/semantic/sample1.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/semantic/normal4.in").unwrap_or_default();
     let _ = parse(&src, BuildConfig::default()).map_err(|e| println!("{}", e));
 }

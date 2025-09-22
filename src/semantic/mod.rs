@@ -45,21 +45,21 @@ impl Into<i32> for SemanticError {
 impl Into<String> for SemanticError {
     fn into(self) -> String {
         match self {
-            SemanticError::UndefinedVariable(name) => format!("Undefined variable '{}'.", name),
-            SemanticError::UndefinedFunction(name) => format!("Undefined function '{}'.", name),
-            SemanticError::RedefinedVariable(name) => format!("Redefined variable '{}'.", name),
-            SemanticError::RedefinedFunction(name) => format!("Redefined function '{}'.", name),
+            SemanticError::UndefinedVariable(name) => format!("Undefined variable '{}'", name),
+            SemanticError::UndefinedFunction(name) => format!("Undefined function '{}'", name),
+            SemanticError::RedefinedVariable(name) => format!("Redefined variable '{}'", name),
+            SemanticError::RedefinedFunction(name) => format!("Redefined function '{}'", name),
             SemanticError::TypeMismatchedForAssignment => {
-                "Type mismatched for assignment.".to_string()
+                "Type mismatched for assignment".to_string()
             }
-            SemanticError::TypeMismatchedForOperands => "Type mismatched for operands.".to_string(),
-            SemanticError::TypeMismatchedForReturn => "Type mismatched for return.".to_string(),
+            SemanticError::TypeMismatchedForOperands => "Type mismatched for operands".to_string(),
+            SemanticError::TypeMismatchedForReturn => "Type mismatched for return".to_string(),
             SemanticError::FunctionArgTypeMismatched(name) => {
-                format!("Function '{}' argument type mismatched.", name)
+                format!("Function '{}' argument type mismatched", name)
             }
-            SemanticError::NotAnArray(name) => format!("'{}' is not an array.", name),
-            SemanticError::NotAFunction(name) => format!("'{}' is not a function.", name),
-            SemanticError::NotALValue(name) => format!("'{}' is not a lvalue.", name),
+            SemanticError::NotAnArray(name) => format!("'{}' is not an array", name),
+            SemanticError::NotAFunction(name) => format!("'{}' is not a function", name),
+            SemanticError::NotALValue(name) => format!("'{}' is not a lvalue", name),
         }
     }
 }
@@ -271,16 +271,7 @@ impl SemanticChecker {
                 ast::StmtInner::Return(exp) | ast::StmtInner::Exp(exp) => {
                     if let Some(exp) = exp {
                         // WIP
-                        self.type_inference(exp).map_or_else(
-                            |e| Err(e),
-                            |ty| {
-                                if ty != Type::Int {
-                                    Err(SemanticError::TypeMismatchedForReturn)
-                                } else {
-                                    Ok(())
-                                }
-                            },
-                        )
+                        self.type_inference(exp).map_or_else(|e| Err(e), |_| Ok(()))
                     } else {
                         Ok(())
                     }
@@ -340,7 +331,7 @@ impl SemanticChecker {
                         AstNodeInner::VarDef {
                             ident,
                             dimensions,
-                            init_val: _,
+                            init_val,
                         } => {
                             let var_type = if dimensions.is_empty() {
                                 ty.clone()
@@ -359,6 +350,25 @@ impl SemanticChecker {
                             if res.is_err() {
                                 return Err(SemanticError::RedefinedVariable(ident.clone()));
                             }
+                            if let Some(init_val) = init_val {
+                                match init_val.as_inner() {
+                                    AstNodeInner::InitVal(init_val_inner) => match init_val_inner {
+                                        ast::InitValInner::ConstExp(exp) => {
+                                            let exp_type = self.type_inference(exp)?;
+                                            if exp_type != ty {
+                                                return Err(
+                                                    SemanticError::TypeMismatchedForAssignment,
+                                                );
+                                            }
+                                        }
+                                        ast::InitValInner::InitList(vals) => {}
+                                        _ => {
+                                            unreachable!()
+                                        }
+                                    },
+                                    _ => unreachable!(),
+                                }
+                            }
                         }
                         _ => unreachable!(),
                     }
@@ -373,7 +383,7 @@ impl SemanticChecker {
 
 #[test]
 fn test_semantic_single() {
-    let src = std::fs::read_to_string("./tests/semantic/sample1.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/semantic/normal1.in").unwrap_or_default();
     // let _ = display_ast(&src);
     let _ = parse(&src, BuildConfig::default()).map_err(|s| println!("{}", s));
 }
