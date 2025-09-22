@@ -2,7 +2,10 @@
 
 pub mod ast;
 
-use crate::semantic::{self, SemanticChecker};
+use crate::semantic::{
+    self, SemanticChecker,
+    symbol_table::{self, FunctionType, Type},
+};
 use ast::AstNodeInner;
 use pest::{Parser, error::ErrorVariant};
 use pest_derive::Parser;
@@ -426,7 +429,119 @@ impl AstBuilder {
         }
         pair_inner.next(); // consume ')'
 
-        // add funcion name and parameters to symbol table
+        // define function in symbol table
+        let ret_ty = match func_type.as_inner() {
+            AstNodeInner::FuncType(s) if s == "int" => Type::Int,
+            AstNodeInner::FuncType(s) if s == "void" => Type::Void,
+            _ => {
+                return Err(format!(
+                    "Invalid function return type: {:?}",
+                    func_type.as_inner()
+                ));
+            }
+        };
+        let mut params_ty = Vec::new();
+        if let Some(params) = params.as_ref() {
+            if let AstNodeInner::FuncFParams(param_list) = params.as_inner() {
+                for param in param_list {
+                    match param.as_inner() {
+                        AstNodeInner::FuncFParam {
+                            btype,
+                            ident: _,
+                            is_array,
+                            dimensions: _,
+                        } => {
+                            let ty = match btype.as_inner() {
+                                AstNodeInner::BType(s) if s == "int" => {
+                                    if *is_array {
+                                        Type::Array(symbol_table::ArrayType {
+                                            ty: Box::new(Type::Int),
+                                            num_elements: None,
+                                        })
+                                    } else {
+                                        Type::Int
+                                    }
+                                }
+                                _ => {
+                                    unreachable!()
+                                }
+                            };
+                            params_ty.push(Box::new(ty));
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+            }
+        }
+
+        let func_ty = FunctionType {
+            ret_ty: Box::new(ret_ty),
+            params_ty,
+        };
+        if self
+            .semantic_checker
+            .scope_stk
+            .peek_mut()
+            .unwrap_or_else(|| unreachable!())
+            .define(
+                &ident,
+                symbol_table::VariableMetadata {
+                    ty: Type::Function(func_ty),
+                },
+            )
+            .is_err()
+        {
+            self.semantic_errors.push_error(
+                line_col.0,
+                semantic::SemanticError::RedefinedFunction(ident.clone()),
+            );
+        }
+
+        self.semantic_checker.entry_scope();
+        // define parameters in symbol table
+        if let Some(params) = params.as_ref() {
+            if let AstNodeInner::FuncFParams(param_list) = params.as_inner() {
+                for param in param_list {
+                    if let AstNodeInner::FuncFParam {
+                        btype,
+                        ident,
+                        is_array,
+                        dimensions: _,
+                    } = param.as_inner()
+                    {
+                        let ty = match btype.as_inner() {
+                            AstNodeInner::BType(s) if s == "int" => {
+                                if *is_array {
+                                    Type::Array(symbol_table::ArrayType {
+                                        ty: Box::new(Type::Int),
+                                        num_elements: None,
+                                    })
+                                } else {
+                                    Type::Int
+                                }
+                            }
+                            _ => {
+                                unreachable!()
+                            }
+                        };
+                        if self
+                            .semantic_checker
+                            .scope_stk
+                            .peek_mut()
+                            .unwrap_or_else(|| unreachable!())
+                            .define(ident, symbol_table::VariableMetadata { ty: ty.clone() })
+                            .is_err()
+                        {
+                            self.semantic_errors.push_error(
+                                line_col.0,
+                                semantic::SemanticError::RedefinedVariable(ident.clone()),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         let body = self.build_ast_node(pair_inner.next().unwrap())?;
         let inner = AstNodeInner::FuncDef {
             func_type,
@@ -435,6 +550,7 @@ impl AstBuilder {
             body,
         };
 
+        self.semantic_checker.exit_scope();
         Ok(AstNode::new(inner, line_col))
     }
 

@@ -66,7 +66,7 @@ impl Into<String> for SemanticError {
 
 #[derive(Debug, Default)]
 pub struct SemanticChecker {
-    scope_stk: ScopeStack,
+    pub scope_stk: ScopeStack,
 }
 
 impl SemanticChecker {
