@@ -1,10 +1,11 @@
 use crate::semantic::SemanticError;
-use crate::semantic::symbol_table::{SymbolTable, VariableMetadata};
+use crate::semantic::symbol_table::{SymbolTable, Type, VariableMetadata};
 
 #[derive(Debug, Clone)]
 pub struct Scope {
     symtb: SymbolTable,
     parent: Option<Box<Scope>>,
+    ret_ty: Option<Box<Type>>,
 }
 
 impl Default for Scope {
@@ -12,15 +13,17 @@ impl Default for Scope {
         Self {
             symtb: SymbolTable::default(),
             parent: None,
+            ret_ty: None,
         }
     }
 }
 
 impl Scope {
-    pub fn new(parent: Option<Box<Scope>>) -> Self {
+    pub fn new(parent: Option<Box<Scope>>, ret_ty: Option<Box<Type>>) -> Self {
         Self {
             symtb: SymbolTable::default(),
             parent,
+            ret_ty,
         }
     }
 
@@ -52,14 +55,14 @@ pub struct ScopeStack {
 impl Default for ScopeStack {
     fn default() -> Self {
         let mut default = Self { top: None, len: 0 };
-        default.push(); // global scope
+        default.push(None); // global scope
         default
     }
 }
 
 impl ScopeStack {
-    pub fn push(&mut self) {
-        self.top = Some(Box::new(Scope::new(self.top.take())));
+    pub fn push(&mut self, ret_ty: Option<Box<Type>>) {
+        self.top = Some(Box::new(Scope::new(self.top.take(), ret_ty)));
         self.len += 1;
     }
 
@@ -76,5 +79,11 @@ impl ScopeStack {
 
     pub fn peek_mut(&mut self) -> Option<&mut Scope> {
         self.top.as_deref_mut()
+    }
+
+    pub fn return_type(&self) -> Option<&Type> {
+        self.top
+            .as_deref()
+            .and_then(|scope| scope.ret_ty.as_deref())
     }
 }

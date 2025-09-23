@@ -3,6 +3,7 @@ pub mod symbol_table;
 
 use crate::parser::ast::{self, AstNode, AstNodeInner};
 use crate::parser::{BuildConfig, display_ast, parse};
+use crate::semantic;
 use crate::semantic::scope::{Scope, ScopeStack};
 use crate::semantic::symbol_table::{SymbolTable, Type, VariableMetadata};
 use std::io::Write;
@@ -70,12 +71,16 @@ pub struct SemanticChecker {
 }
 
 impl SemanticChecker {
-    pub fn entry_scope(&mut self) {
-        self.scope_stk.push();
+    pub fn entry_scope(&mut self, ret_ty: Option<Box<Type>>) {
+        self.scope_stk.push(ret_ty);
     }
 
     pub fn exit_scope(&mut self) {
         self.scope_stk.pop();
+    }
+
+    pub fn return_type(&self) -> Option<&Type> {
+        self.scope_stk.return_type()
     }
 
     // maybe using cache to store inferred types to optimize performance
@@ -240,19 +245,22 @@ impl SemanticChecker {
                         .map_or_else(
                             || Err(SemanticError::UndefinedVariable(ident.clone())),
                             |var_meta| {
-                                self.type_inference(exp).map_or_else(
-                                    |e| Err(e),
-                                    |ty| {
-                                        if var_meta.ty != Type::Int {
-                                            return Err(SemanticError::NotALValue(ident.clone()));
+                                let rhs_ty = self.type_inference(exp)?;
+                                match &var_meta.ty {
+                                    Type::Int => {
+                                        if rhs_ty != Type::Int {
+                                            return Err(SemanticError::TypeMismatchedForAssignment);
                                         }
-                                        if var_meta.ty != ty {
-                                            Err(SemanticError::TypeMismatchedForAssignment)
-                                        } else {
-                                            Ok(())
+                                        Ok(())
+                                    }
+                                    Type::Array(array_type) => {
+                                        if rhs_ty != *(array_type.ty) {
+                                            return Err(SemanticError::TypeMismatchedForAssignment);
                                         }
-                                    },
-                                )
+                                        Ok(())
+                                    }
+                                    _ => Err(SemanticError::NotALValue(ident.clone())),
+                                }
                             },
                         )
                 }
@@ -268,7 +276,22 @@ impl SemanticChecker {
                     .type_inference(cond)
                     .map_or_else(|e| Err(e), |_| Ok(())),
                 ast::StmtInner::Break | ast::StmtInner::Continue => Ok(()),
-                ast::StmtInner::Return(exp) | ast::StmtInner::Exp(exp) => {
+                ast::StmtInner::Return(exp) => {
+                    if let Some(exp) = exp {
+                        let exp_ty = self.type_inference(exp)?;
+                        if let Some(ret_ty) = self.return_type() {
+                            if *ret_ty != exp_ty {
+                                return Err(SemanticError::TypeMismatchedForReturn);
+                            }
+                        } else {
+                            unreachable!()
+                        }
+                        Ok(())
+                    } else {
+                        Ok(())
+                    }
+                }
+                ast::StmtInner::Exp(exp) => {
                     if let Some(exp) = exp {
                         // WIP
                         self.type_inference(exp).map_or_else(|e| Err(e), |_| Ok(()))
@@ -361,10 +384,7 @@ impl SemanticChecker {
                                                 );
                                             }
                                         }
-                                        ast::InitValInner::InitList(vals) => {}
-                                        _ => {
-                                            unreachable!()
-                                        }
+                                        ast::InitValInner::InitList(_) => {}
                                     },
                                     _ => unreachable!(),
                                 }

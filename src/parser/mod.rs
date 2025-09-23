@@ -497,7 +497,18 @@ impl AstBuilder {
             );
         }
 
-        self.semantic_checker.entry_scope();
+        let ret_ty = match func_type.as_inner() {
+            AstNodeInner::FuncType(s) if s == "int" => Type::Int,
+            AstNodeInner::FuncType(s) if s == "void" => Type::Void,
+            _ => {
+                return Err(format!(
+                    "Invalid function return type: {:?}",
+                    func_type.as_inner()
+                ));
+            }
+        };
+        self.semantic_checker
+            .entry_scope(Some(Box::new(ret_ty.clone())));
         // define parameters in symbol table
         if let Some(params) = params.as_ref() {
             if let AstNodeInner::FuncFParams(param_list) = params.as_inner() {
@@ -605,7 +616,11 @@ impl AstBuilder {
     }
 
     fn build_block(&mut self, pair: pest::iterators::Pair<Rule>) -> Result<AstNode, String> {
-        self.semantic_checker.entry_scope();
+        self.semantic_checker
+            .entry_scope(match self.semantic_checker.return_type() {
+                Some(ty) => Some(Box::new(ty.clone())),
+                None => None,
+            });
         let line_col = pair.line_col();
         let inner = AstNodeInner::Block(
             pair.into_inner()
@@ -1056,6 +1071,6 @@ fn test_display_ast() {
 
 #[test]
 fn test_semantic_single() {
-    let src = std::fs::read_to_string("./tests/semantic/normal4.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/semantic/normal6.in").unwrap_or_default();
     let _ = parse(&src, BuildConfig::default()).map_err(|e| println!("{}", e));
 }
