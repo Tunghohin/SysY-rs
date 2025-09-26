@@ -8,3 +8,4 @@ pest = "2.5.0"
 pest_derive = "2.5.0"
 llvm-sys = "140.1.3"
 anyhow = "1.0.99"
+syn = { version = "2.0.106", features = ["full", "extra-traits"] }

@@ -49,6 +49,7 @@ dependencies = [
  "llvm-sys",
  "pest",
  "pest_derive",
+ "syn",
 ]
 
 [[package]]

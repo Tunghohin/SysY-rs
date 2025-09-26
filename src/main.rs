@@ -1,9 +1,6 @@
-use std::{
-    env,
-    fs,
-};
+use std::{env, fs};
 
-mod lexer;
+mod rust_mir_gen;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -11,19 +8,7 @@ fn main() {
         eprintln!("Usage: {} <filename>", args[0]);
         std::process::exit(1);
     }
-    let input = fs::read_to_string(&args[1])
-        .expect("Failed to read file");
-
-    lexer::tokenize(&input)
-        .unwrap_or_else(|e| {
-            eprintln!("{}", e);
-            vec![]
-        })
-        .iter()
-        .for_each(|token| match token.kind {
-            lexer::token::TokenKind::Eof => {}
-            _ => {
-                eprintln!("{}", token);
-            }
-        })
+    let src = fs::read_to_string(&args[1]).expect("Failed to read file");
+    let syntax = syn::parse_file(&src).expect("Failed to parse file");
+    rust_mir_gen::gen_mir(&syntax);
 }
