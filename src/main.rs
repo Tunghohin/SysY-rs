@@ -5,6 +5,8 @@ mod lexer;
 mod parser;
 mod semantic;
 
+mod codegen;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {

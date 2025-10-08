@@ -7,3 +7,4 @@ edition = "2024"
 pest = "2.5.0"
 pest_derive = "2.5.0"
 anyhow = "1.0.99"
+inkwell = { version = "0.6.0", features = ["llvm14-0"] }

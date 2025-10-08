@@ -1065,7 +1065,7 @@ pub fn parse(src: &str, config: BuildConfig) -> Result<Box<AstNode>, String> {
 
 #[test]
 fn test_display_ast() {
-    let src = std::fs::read_to_string("./tests/semantic/normal3.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/codegen/test1.in").unwrap_or_default();
     let _ = display_ast(&src);
 }
 

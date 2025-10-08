@@ -214,3 +214,15 @@ pub enum InitValInner {
 pub enum NumberInner {
     IntegerConst(String),
 }
+
+impl TryInto<i32> for NumberInner {
+    type Error = String;
+
+    fn try_into(self) -> Result<i32, Self::Error> {
+        match self {
+            NumberInner::IntegerConst(s) => s
+                .parse::<i32>()
+                .map_err(|e| format!("Failed to parse integer: {}", e)),
+        }
+    }
+}
