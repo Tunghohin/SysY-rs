@@ -7,7 +7,7 @@ use crate::parser::BuildConfig;
 use crate::parser::PrimaryExpInner;
 use crate::parser::ast::{
     AddOpInner, AstNode, AstNodeInner, ConstInitValInner, InitValInner, MulOpInner, RelOpInner,
-    UnaryExpInner, UnaryOpInner,
+    StmtInner, UnaryExpInner, UnaryOpInner,
 };
 use crate::parser::parse;
 
@@ -17,7 +17,7 @@ use inkwell::OptimizationLevel;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
-use inkwell::types::BasicTypeEnum;
+use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
 use inkwell::values::{
     BasicValue, BasicValueEnum, FunctionValue, GlobalValue, IntValue, PointerValue,
 };
@@ -240,7 +240,7 @@ impl<'ctx> Codegen<'ctx> {
             if is_global {
                 let global_val = self.module.add_global(ty, None, ident.as_str());
                 global_val.set_initializer(&value);
-                global_val.set_constant(true);
+                global_val.set_constant(false);
                 self.scope_stk
                     .peek_mut()
                     .ok_or("Scope stack is empty".to_string())?
@@ -248,7 +248,7 @@ impl<'ctx> Codegen<'ctx> {
                         ident,
                         crate::codegen::symbol_table::BasicValueEnumWrapper {
                             inner: global_val.as_basic_value_enum(),
-                            constness: true,
+                            constness: false,
                         },
                     )?;
             } else {
@@ -269,6 +269,68 @@ impl<'ctx> Codegen<'ctx> {
         else {
             return Err("Invalid FuncDef node".to_string());
         };
+
+        let AstNodeInner::FuncType(ret_type_str) = func_type.as_inner() else {
+            return Err("Invalid function return type".to_string());
+        };
+
+        let ret_type = match ret_type_str.as_str() {
+            "int" => Some(self.ctx.i32_type()),
+            "void" => None,
+            _ => return Err("Unsupported return type".to_string()),
+        };
+
+        let param_types = if let Some(params_node) = params {
+            if let AstNodeInner::FuncFParams(params_list) = params_node.as_inner() {
+                params_list
+                    .iter()
+                    .map(|_| self.ctx.i32_type().into())
+                    .collect::<Vec<BasicMetadataTypeEnum>>()
+            } else {
+                return Err("Invalid function parameters".to_string());
+            }
+        } else {
+            vec![]
+        };
+
+        let fn_type = if let Some(ret_ty) = ret_type {
+            self.ctx.i32_type().fn_type(&param_types, false)
+        } else {
+            self.ctx.void_type().fn_type(&param_types, false)
+        };
+
+        let function = self.module.add_function(ident.as_str(), fn_type, None);
+
+        let entry_bb = self.ctx.append_basic_block(function, "entry");
+        self.builder.position_at_end(entry_bb);
+
+        let AstNodeInner::Block(items) = body.as_inner() else {
+            return Err("Invalid function body".to_string());
+        };
+        // for item in items {
+        //     match item.as_inner() {
+        //         AstNodeInner::Decl(_) => self.gen_decl(item, false)?,
+        //         AstNodeInner::Stmt(stmt) => match &**stmt {
+        //             StmtInner::Return(Some(exp)) => {
+        //                 let ret_val = self.gen_exp(exp)?;
+        //                 let ret_int = self.into_int_value_helper(ret_val)?;
+        //                 let _ = self.builder.build_return(Some(&ret_int));
+        //             }
+        //             StmtInner::Return(None) => {
+        //                 let _ = self.builder.build_return(None);
+        //             }
+        //             _ => self.gen_stmt(item)?,
+        //         },
+        //         _ => return Err("Unexpected node in function body".to_string()),
+        //     }
+        // }
+        let _ = self.builder.build_return(Some(
+            &self
+                .ctx
+                .i32_type()
+                .const_int(42, false)
+                .as_basic_value_enum(),
+        ));
 
         Ok(())
     }
@@ -303,11 +365,21 @@ impl<'ctx> Codegen<'ctx> {
                     return Err(format!("Variable {} is not constant", ident));
                 }
                 match var.inner {
-                    BasicValueEnum::PointerValue(pv) => Ok(pv
-                        .const_to_int(self.ctx.i32_type())
-                        .get_zero_extended_constant()
-                        .unwrap_or_else(|| unreachable!())
-                        as i32),
+                    BasicValueEnum::PointerValue(pv) => {
+                        let Some(name) = pv.get_name().to_str().ok() else {
+                            return Err("Invalid variable name".to_string());
+                        };
+
+                        let Some(iv) = self.module.get_global(name).unwrap().get_initializer()
+                        else {
+                            return Err("Failed to get initializer for global variable".to_string());
+                        };
+
+                        Ok(iv
+                            .into_int_value()
+                            .get_zero_extended_constant()
+                            .unwrap_or_else(|| unreachable!()) as i32)
+                    }
                     BasicValueEnum::IntValue(iv) => Ok(iv
                         .get_zero_extended_constant()
                         .unwrap_or_else(|| unreachable!())

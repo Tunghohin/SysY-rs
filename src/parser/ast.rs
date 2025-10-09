@@ -1,4 +1,5 @@
-#![allow(dead_code)]
+#![allow(unused)]
+#![allow(unused_imports)]
 
 use crate::parser::Parser;
 use crate::parser::Rule;

@@ -1,6 +1,8 @@
 #![allow(dead_code)]
+#![allow(unused_imports)]
 
-use crate::parser::{BuildConfig, ast::*};
+use crate::parser::BuildConfig;
+use crate::parser::ast::*;
 use std::fmt::Write;
 use std::fs;
 

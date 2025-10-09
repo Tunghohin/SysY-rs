@@ -101,8 +101,6 @@ impl fmt::Display for TokenKind {
             TokenKind::RBracket => "R_BRACKT",
             TokenKind::Comma => "COMMA",
             TokenKind::Semicolon => "SEMICOLON",
-
-            _ => { unreachable!() }
         };
         write!(f, "{}", name)
     }

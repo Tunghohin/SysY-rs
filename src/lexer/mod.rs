@@ -1,3 +1,6 @@
+#![allow(unused_imports)]
+#![allow(unused)]
+
 pub mod token;
 
 use anyhow::Result;
@@ -9,7 +12,7 @@ use std::{fs, slice::RSplit};
 #[grammar = "./rules.pest"]
 pub(crate) struct SysYLexer;
 
-pub fn tokenize(input: &str) -> Result<Vec<token::Token>, Vec<String>> {
+pub fn tokenize(input: &str) -> Result<Vec<token::Token<'_>>, Vec<String>> {
     let mut pos_offset: usize = 0;
     let mut line_offset = 0;
     let mut errors = Vec::new();

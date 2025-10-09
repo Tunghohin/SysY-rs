@@ -1,2 +1,19 @@
-const int a = 3, b = 3;
+const int a = 2, b = 88;
 int c = a + b;
+int d = a * b;
+int e = b / a;
+int f = b % a;
+int g = -a;
+int h = +a;
+int i = !a;
+int j = a == a;
+int k = a != b;
+int l = a == b;
+
+int add(int a, int b) {
+    return a + b;
+}
+
+int main() {
+    return c + d;
+}
