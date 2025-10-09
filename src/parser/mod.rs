@@ -1070,7 +1070,7 @@ fn test_display_ast() {
 }
 
 #[test]
-fn test_semantic_single() {
+fn test_parse_single() {
     let src = std::fs::read_to_string("./tests/semantic/normal6.in").unwrap_or_default();
     let _ = parse(&src, BuildConfig::default()).map_err(|e| println!("{}", e));
 }

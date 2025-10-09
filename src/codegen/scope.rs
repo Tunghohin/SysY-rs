@@ -24,8 +24,8 @@ impl<'ctx> Scope<'ctx> {
         }
     }
 
-    pub fn define(&mut self, name: &String, var_meta: BasicValueEnum<'ctx>) -> Result<(), String> {
-        self.symtb.define(name, var_meta)
+    pub fn define(&mut self, name: &String, val_enum: BasicValueEnum<'ctx>) -> Result<(), String> {
+        self.symtb.define(name, val_enum)
     }
 
     pub fn resolve(&self, name: &String) -> Option<&BasicValueEnum<'ctx>> {

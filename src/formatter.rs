@@ -602,7 +602,7 @@ pub fn test_formatter() {
 
 #[test]
 pub fn test_single() {
-    let src = std::fs::read_to_string("./tests/parser/error1.in").unwrap_or_default();
+    let src = std::fs::read_to_string("./tests/parser/hack1.in").unwrap_or_default();
     match crate::parser::parse(&src, BuildConfig::default()) {
         Ok(root) => println!("{}", format_ast(&root)),
         Err(e) => {
