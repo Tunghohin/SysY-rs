@@ -18,7 +18,9 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::types::BasicTypeEnum;
-use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
+use inkwell::values::{
+    BasicValue, BasicValueEnum, FunctionValue, GlobalValue, IntValue, PointerValue,
+};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -100,7 +102,7 @@ impl<'ctx> Codegen<'ctx> {
         };
         for child in children {
             match child.as_inner() {
-                AstNodeInner::Decl(_) => self.gen_decl(child)?,
+                AstNodeInner::Decl(_) => self.gen_decl(child, true)?,
                 AstNodeInner::FuncDef { .. } => self.gen_func_def(child)?,
                 _ => return Err("Unexpected node in CompUnit".to_string()),
             }
@@ -108,29 +110,34 @@ impl<'ctx> Codegen<'ctx> {
         Ok(())
     }
 
-    fn gen_decl(&mut self, node: &AstNode) -> Result<(), String> {
+    fn gen_decl(&mut self, node: &AstNode, is_global: bool) -> Result<(), String> {
         let AstNodeInner::Decl(child) = node.as_inner() else {
             return Err("Invalid Decl node".to_string());
         };
         match child.as_inner() {
-            AstNodeInner::ConstDecl { .. } => self.gen_const_decl(child),
-            AstNodeInner::VarDecl { .. } => self.gen_var_decl(child),
+            AstNodeInner::ConstDecl { .. } => self.gen_const_decl(child, is_global),
+            AstNodeInner::VarDecl { .. } => self.gen_var_decl(child, is_global),
             _ => Err("Unexpected node in Decl".to_string()),
         }
     }
 
-    fn gen_const_decl(&mut self, node: &AstNode) -> Result<(), String> {
+    fn gen_const_decl(&mut self, node: &AstNode, is_global: bool) -> Result<(), String> {
         let AstNodeInner::ConstDecl { btype, const_defs } = node.as_inner() else {
             return Err("Invalid ConstDecl node".to_string());
         };
         for const_def in const_defs {
-            self.gen_const_def(const_def, btype)?;
+            self.gen_const_def(const_def, btype, is_global)?;
         }
 
         Ok(())
     }
 
-    fn gen_const_def(&mut self, node: &AstNode, btype: &AstNode) -> Result<(), String> {
+    fn gen_const_def(
+        &mut self,
+        node: &AstNode,
+        btype: &AstNode,
+        is_global: bool,
+    ) -> Result<(), String> {
         let AstNodeInner::ConstDef {
             ident,
             dimensions,
@@ -139,56 +146,67 @@ impl<'ctx> Codegen<'ctx> {
         else {
             return Err("Invalid ConstDef node".to_string());
         };
-        if dimensions.is_empty() {
-            let init_val = match init_val.as_inner() {
-                AstNodeInner::ConstInitVal(ConstInitValInner::ConstExp(exp)) => self.gen_exp(exp),
-                _ => unreachable!(),
-            };
 
-            if !matches!(btype.as_inner(), AstNodeInner::BType(t) if t == "int") {
-                return Err("Only int type is supported".to_string());
-            }
+        if !dimensions.is_empty() {
+            return Err("Array not supported yet".to_string());
+        }
 
-            let ty = self.ctx.i32_type();
-            let value = match init_val? {
-                BasicValueEnum::IntValue(v) => v,
-                _ => unimplemented!(),
-            };
-            match self.builder.get_insert_block().and_then(|b| b.get_parent()) {
-                Some(func) => {
-                    // local variable
-                    unimplemented!()
-                }
-                None => {
-                    // global variable
-                    let global_val = self.module.add_global(ty, None, ident.as_str());
-                    global_val.set_initializer(&value);
-                    global_val.set_constant(true);
-                    self.scope_stk
-                        .peek_mut()
-                        .ok_or("Scope stack is empty".to_string())?
-                        .define(ident, global_val.as_basic_value_enum())?;
-                }
-            }
+        if !matches!(btype.as_inner(), AstNodeInner::BType(t) if t == "int") {
+            return Err("Only int type is supported".to_string());
+        }
+
+        let AstNodeInner::ConstInitVal(ConstInitValInner::ConstExp(exp_inner)) =
+            init_val.as_inner()
+        else {
+            return Err("Only ConstExp is supported in ConstInitVal".to_string());
+        };
+
+        if !dimensions.is_empty() {
+            return Err("Array not supported yet".to_string());
         } else {
-            unimplemented!()
+            let init_val = self.const_exp_inference(exp_inner)?;
+            let ty = self.ctx.i32_type();
+            let value = ty.const_int(init_val as u64, false);
+
+            if is_global {
+                let global_val = self.module.add_global(ty, None, ident.as_str());
+                global_val.set_initializer(&value);
+                global_val.set_constant(true);
+                self.scope_stk
+                    .peek_mut()
+                    .ok_or("Scope stack is empty".to_string())?
+                    .define(
+                        ident,
+                        crate::codegen::symbol_table::BasicValueEnumWrapper {
+                            inner: global_val.as_basic_value_enum(),
+                            constness: true,
+                        },
+                    )?;
+            } else {
+                return Err("Local const not supported yet".to_string());
+            }
         }
 
         Ok(())
     }
 
-    fn gen_var_decl(&mut self, node: &AstNode) -> Result<(), String> {
+    fn gen_var_decl(&mut self, node: &AstNode, is_global: bool) -> Result<(), String> {
         let AstNodeInner::VarDecl { btype, var_defs } = node.as_inner() else {
             return Err("Invalid VarDecl node".to_string());
         };
         for var_def in var_defs {
-            self.gen_var_def(var_def, btype)?;
+            self.gen_var_def(var_def, btype, is_global)?;
         }
 
         Ok(())
     }
 
-    fn gen_var_def(&mut self, node: &AstNode, btype: &AstNode) -> Result<(), String> {
+    fn gen_var_def(
+        &mut self,
+        node: &AstNode,
+        btype: &AstNode,
+        is_global: bool,
+    ) -> Result<(), String> {
         let AstNodeInner::VarDef {
             ident,
             dimensions,
@@ -198,44 +216,44 @@ impl<'ctx> Codegen<'ctx> {
             return Err("Invalid VarDef node".to_string());
         };
 
-        if dimensions.is_empty() {
-            let init_val = match init_val {
-                Some(boxed) => match boxed.as_inner() {
-                    AstNodeInner::InitVal(InitValInner::ConstExp(exp)) => self.gen_exp(exp),
-                    _ => unreachable!(),
-                },
-                None => {
-                    unimplemented!()
-                }
-            };
+        if !dimensions.is_empty() {
+            return Err("Array not supported yet".to_string());
+        }
+        if !matches!(btype.as_inner(), AstNodeInner::BType(t) if t == "int") {
+            return Err("Only int type is supported".to_string());
+        }
 
-            if !matches!(btype.as_inner(), AstNodeInner::BType(t) if t == "int") {
-                return Err("Only int type is supported".to_string());
-            }
+        let Some(init_val) = init_val else {
+            return Err("Uninitialized variable is not supported yet".to_string());
+        };
+        let AstNodeInner::InitVal(InitValInner::ConstExp(exp_inner)) = init_val.as_inner() else {
+            return Err("Only Exp is supported in InitVal".to_string());
+        };
 
-            let ty = self.ctx.i32_type();
-            let value = match init_val? {
-                BasicValueEnum::IntValue(v) => v,
-                _ => unimplemented!(),
-            };
-            match self.builder.get_insert_block().and_then(|b| b.get_parent()) {
-                Some(func) => {
-                    // local variable
-                    unimplemented!()
-                }
-                None => {
-                    // global variable
-                    let global_val = self.module.add_global(ty, None, ident.as_str());
-                    global_val.set_initializer(&value);
-                    global_val.set_constant(false);
-                    self.scope_stk
-                        .peek_mut()
-                        .ok_or("Scope stack is empty".to_string())?
-                        .define(ident, global_val.as_basic_value_enum())?;
-                }
-            }
+        if !dimensions.is_empty() {
+            return Err("Array not supported yet".to_string());
         } else {
-            unimplemented!()
+            let init_val = self.const_exp_inference(exp_inner)?;
+            let ty = self.ctx.i32_type();
+            let value = ty.const_int(init_val as u64, false);
+
+            if is_global {
+                let global_val = self.module.add_global(ty, None, ident.as_str());
+                global_val.set_initializer(&value);
+                global_val.set_constant(true);
+                self.scope_stk
+                    .peek_mut()
+                    .ok_or("Scope stack is empty".to_string())?
+                    .define(
+                        ident,
+                        crate::codegen::symbol_table::BasicValueEnumWrapper {
+                            inner: global_val.as_basic_value_enum(),
+                            constness: true,
+                        },
+                    )?;
+            } else {
+                return Err("Local const not supported yet".to_string());
+            }
         }
 
         Ok(())
@@ -269,12 +287,183 @@ impl<'ctx> Codegen<'ctx> {
         Ok(())
     }
 
+    fn const_exp_inference(&mut self, node: &AstNode) -> Result<i32, String> {
+        match node.as_inner() {
+            AstNodeInner::Exp(exp) | AstNodeInner::Cond(exp) => self.const_exp_inference(exp),
+            AstNodeInner::LVal { ident, dimensions } => {
+                let Some(var) = self
+                    .scope_stk
+                    .peek()
+                    .unwrap_or_else(|| unreachable!())
+                    .resolve(&ident)
+                else {
+                    return Err(format!("Undefined variable: {}", ident));
+                };
+                if !var.is_const() {
+                    return Err(format!("Variable {} is not constant", ident));
+                }
+                match var.inner {
+                    BasicValueEnum::PointerValue(pv) => Ok(pv
+                        .const_to_int(self.ctx.i32_type())
+                        .get_zero_extended_constant()
+                        .unwrap_or_else(|| unreachable!())
+                        as i32),
+                    BasicValueEnum::IntValue(iv) => Ok(iv
+                        .get_zero_extended_constant()
+                        .unwrap_or_else(|| unreachable!())
+                        as i32),
+
+                    _ => unreachable!(),
+                }
+            }
+            AstNodeInner::PrimaryExp(primary_inner) => match primary_inner {
+                PrimaryExpInner::Exp(exp) => self.const_exp_inference(exp),
+                PrimaryExpInner::Number(number) => {
+                    let AstNodeInner::Number(value) = number.as_inner() else {
+                        return Err("Invalid Number node".to_string());
+                    };
+                    let literal: i32 = value.clone().try_into()?;
+                    Ok(literal)
+                }
+                PrimaryExpInner::LVal(lval) => self.const_exp_inference(lval),
+            },
+            AstNodeInner::UnaryExp(unary_inner) => match unary_inner {
+                UnaryExpInner::PrimaryExp(child) => self.const_exp_inference(child),
+                UnaryExpInner::Unary { op, exp } => {
+                    let rhs = self.const_exp_inference(exp)?;
+                    let result = match op.as_inner() {
+                        AstNodeInner::UnaryOp(unary_op) => match unary_op {
+                            UnaryOpInner::Plus => rhs,
+                            UnaryOpInner::Minus => -rhs,
+                            UnaryOpInner::Not => {
+                                if rhs == 0 {
+                                    1
+                                } else {
+                                    0
+                                }
+                            }
+                        },
+                        _ => unreachable!(),
+                    };
+                    Ok(result)
+                }
+                _ => Err("Unimplemented unary expression".to_string()),
+            },
+            AstNodeInner::MulExp { lhs, ops } => {
+                let mut left = self.const_exp_inference(lhs)?;
+                for (op, rhs_node) in ops {
+                    let rhs = self.const_exp_inference(rhs_node)?;
+                    left = match op {
+                        MulOpInner::Mul => left * rhs,
+                        MulOpInner::Div => left / rhs,
+                        MulOpInner::Mod => left % rhs,
+                    }
+                }
+                Ok(left)
+            }
+            AstNodeInner::AddExp { lhs, ops } => {
+                let mut left = self.const_exp_inference(lhs)?;
+                for (op, rhs_node) in ops {
+                    let rhs = self.const_exp_inference(rhs_node)?;
+                    left = match op {
+                        AddOpInner::Plus => left + rhs,
+                        AddOpInner::Minus => left - rhs,
+                    }
+                }
+                Ok(left)
+            }
+            AstNodeInner::RelExp { lhs, ops } => {
+                let mut left = self.const_exp_inference(lhs)?;
+                for (op, rhs_node) in ops {
+                    let rhs = self.const_exp_inference(rhs_node)?;
+                    left = match op {
+                        RelOpInner::Lt => {
+                            if left < rhs {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        RelOpInner::Gt => {
+                            if left > rhs {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        RelOpInner::Le => {
+                            if left <= rhs {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        RelOpInner::Ge => {
+                            if left >= rhs {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                    }
+                }
+                Ok(left)
+            }
+            AstNodeInner::EqExp { lhs, ops } => {
+                let mut left = self.const_exp_inference(lhs)?;
+                for (op, rhs_node) in ops {
+                    let rhs = self.const_exp_inference(rhs_node)?;
+                    left = match op {
+                        crate::parser::EqOpInner::Eq => {
+                            if left == rhs {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        crate::parser::EqOpInner::Neq => {
+                            if left != rhs {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                    }
+                }
+                Ok(left)
+            }
+            AstNodeInner::AndExp { lhs, ops } => {
+                let mut left = self.const_exp_inference(lhs)?;
+                for (_op, rhs_node) in ops {
+                    let rhs = self.const_exp_inference(rhs_node)?;
+                    left = if left != 0 && rhs != 0 { 1 } else { 0 };
+                }
+                Ok(left)
+            }
+            AstNodeInner::OrExp { lhs, ops } => {
+                let mut left = self.const_exp_inference(lhs)?;
+                for (_op, rhs_node) in ops {
+                    let rhs = self.const_exp_inference(rhs_node)?;
+                    left = if left != 0 || rhs != 0 { 1 } else { 0 };
+                }
+                Ok(left)
+            }
+            AstNodeInner::ConstExp(exp) => self.const_exp_inference(exp),
+
+            _ => unreachable!(),
+        }
+    }
+
     fn gen_exp(&mut self, node: &AstNode) -> Result<BasicValueEnum<'ctx>, String> {
         match node.as_inner() {
-            AstNodeInner::Exp(exp) | AstNodeInner::Cond(exp) | AstNodeInner::ConstExp(exp) => {
-                self.gen_exp(exp)
-            }
+            AstNodeInner::Exp(exp) | AstNodeInner::Cond(exp) => self.gen_exp(exp),
             AstNodeInner::LVal { ident, dimensions } => self.gen_lval(ident, dimensions),
+            AstNodeInner::PrimaryExp(primary_inner) => match primary_inner {
+                PrimaryExpInner::Exp(exp) => self.gen_exp(exp),
+                PrimaryExpInner::Number(number) => self.gen_number(number),
+                PrimaryExpInner::LVal(lval) => self.gen_exp(&lval),
+            },
+            AstNodeInner::Number(_) => self.gen_number(node),
             AstNodeInner::UnaryExp(unary_inner) => match unary_inner {
                 UnaryExpInner::PrimaryExp(child) => self.gen_exp(child),
                 UnaryExpInner::Unary { op, exp } => {
@@ -448,12 +637,6 @@ impl<'ctx> Codegen<'ctx> {
                 Ok(left)
             }
 
-            AstNodeInner::PrimaryExp(primary_inner) => match primary_inner {
-                PrimaryExpInner::Exp(exp) => self.gen_exp(exp),
-                PrimaryExpInner::Number(number) => self.gen_number(number),
-                PrimaryExpInner::LVal(lval) => self.gen_exp(&lval),
-            },
-            AstNodeInner::Number(_) => self.gen_number(node),
             _ => Err("Unimplemented expression type".to_string()),
         }
     }
@@ -463,12 +646,17 @@ impl<'ctx> Codegen<'ctx> {
         ident: &String,
         dimensions: &Vec<Box<AstNode>>,
     ) -> Result<BasicValueEnum<'ctx>, String> {
-        self.scope_stk
-            .peek_mut()
+        match self
+            .scope_stk
+            .peek()
             .unwrap_or_else(|| unreachable!())
             .resolve(&ident)
-            .ok_or_else(|| format!("Undefined variable: {}", ident))
-            .cloned()
+        {
+            Some(var) => {
+                return Ok(var.inner.clone());
+            }
+            None => return Err(format!("Undefined variable: {}", ident)),
+        }
     }
 
     fn gen_number(&mut self, node: &AstNode) -> Result<BasicValueEnum<'ctx>, String> {
