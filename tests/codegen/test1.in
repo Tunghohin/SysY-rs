@@ -1,4 +1,6 @@
 const int a = 2, b = 88;
+const int aa = 2 * 3 + 1;
+int aaa = 2 * 3 + 2;
 int c = a + b;
 int d = a * b;
 int e = b / a;
@@ -12,6 +14,10 @@ int l = a == b;
 
 int add(int a, int b) {
     return a + b;
+}
+
+void voidfunc() {
+    return;
 }
 
 int main() {

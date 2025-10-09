@@ -781,7 +781,7 @@ fn codegen() {
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));
     let context = Context::create();
-    let mut codegen = Codegen::new("test", &context);
+    let mut codegen = Codegen::new("module", &context);
     codegen
         .gen_comp_unit(&ast)
         .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
