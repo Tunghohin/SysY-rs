@@ -164,7 +164,7 @@ impl<'ctx> Codegen<'ctx> {
         if !dimensions.is_empty() {
             return Err("Array not supported yet".to_string());
         } else {
-            let init_val = self.const_exp_inference(exp_inner)?;
+            let init_val = self.const_expr_inference(exp_inner)?;
             let ty = self.ctx.i32_type();
             let value = ty.const_int(init_val as u64, false);
 
@@ -233,7 +233,7 @@ impl<'ctx> Codegen<'ctx> {
         if !dimensions.is_empty() {
             return Err("Array not supported yet".to_string());
         } else {
-            let init_val = self.const_exp_inference(exp_inner)?;
+            let init_val = self.const_expr_inference(exp_inner)?;
             let ty = self.ctx.i32_type();
             let value = ty.const_int(init_val as u64, false);
 
@@ -349,9 +349,9 @@ impl<'ctx> Codegen<'ctx> {
         Ok(())
     }
 
-    fn const_exp_inference(&mut self, node: &AstNode) -> Result<i32, String> {
+    fn const_expr_inference(&mut self, node: &AstNode) -> Result<i32, String> {
         match node.as_inner() {
-            AstNodeInner::Exp(exp) | AstNodeInner::Cond(exp) => self.const_exp_inference(exp),
+            AstNodeInner::Exp(exp) | AstNodeInner::Cond(exp) => self.const_expr_inference(exp),
             AstNodeInner::LVal { ident, dimensions } => {
                 let Some(var) = self
                     .scope_stk
@@ -389,7 +389,7 @@ impl<'ctx> Codegen<'ctx> {
                 }
             }
             AstNodeInner::PrimaryExp(primary_inner) => match primary_inner {
-                PrimaryExpInner::Exp(exp) => self.const_exp_inference(exp),
+                PrimaryExpInner::Exp(exp) => self.const_expr_inference(exp),
                 PrimaryExpInner::Number(number) => {
                     let AstNodeInner::Number(value) = number.as_inner() else {
                         return Err("Invalid Number node".to_string());
@@ -397,12 +397,12 @@ impl<'ctx> Codegen<'ctx> {
                     let literal: i32 = value.clone().try_into()?;
                     Ok(literal)
                 }
-                PrimaryExpInner::LVal(lval) => self.const_exp_inference(lval),
+                PrimaryExpInner::LVal(lval) => self.const_expr_inference(lval),
             },
             AstNodeInner::UnaryExp(unary_inner) => match unary_inner {
-                UnaryExpInner::PrimaryExp(child) => self.const_exp_inference(child),
+                UnaryExpInner::PrimaryExp(child) => self.const_expr_inference(child),
                 UnaryExpInner::Unary { op, exp } => {
-                    let rhs = self.const_exp_inference(exp)?;
+                    let rhs = self.const_expr_inference(exp)?;
                     let result = match op.as_inner() {
                         AstNodeInner::UnaryOp(unary_op) => match unary_op {
                             UnaryOpInner::Plus => rhs,
@@ -422,9 +422,9 @@ impl<'ctx> Codegen<'ctx> {
                 _ => Err("Unimplemented unary expression".to_string()),
             },
             AstNodeInner::MulExp { lhs, ops } => {
-                let mut left = self.const_exp_inference(lhs)?;
+                let mut left = self.const_expr_inference(lhs)?;
                 for (op, rhs_node) in ops {
-                    let rhs = self.const_exp_inference(rhs_node)?;
+                    let rhs = self.const_expr_inference(rhs_node)?;
                     left = match op {
                         MulOpInner::Mul => left * rhs,
                         MulOpInner::Div => left / rhs,
@@ -434,9 +434,9 @@ impl<'ctx> Codegen<'ctx> {
                 Ok(left)
             }
             AstNodeInner::AddExp { lhs, ops } => {
-                let mut left = self.const_exp_inference(lhs)?;
+                let mut left = self.const_expr_inference(lhs)?;
                 for (op, rhs_node) in ops {
-                    let rhs = self.const_exp_inference(rhs_node)?;
+                    let rhs = self.const_expr_inference(rhs_node)?;
                     left = match op {
                         AddOpInner::Plus => left + rhs,
                         AddOpInner::Minus => left - rhs,
@@ -445,9 +445,9 @@ impl<'ctx> Codegen<'ctx> {
                 Ok(left)
             }
             AstNodeInner::RelExp { lhs, ops } => {
-                let mut left = self.const_exp_inference(lhs)?;
+                let mut left = self.const_expr_inference(lhs)?;
                 for (op, rhs_node) in ops {
-                    let rhs = self.const_exp_inference(rhs_node)?;
+                    let rhs = self.const_expr_inference(rhs_node)?;
                     left = match op {
                         RelOpInner::Lt => {
                             if left < rhs {
@@ -482,9 +482,9 @@ impl<'ctx> Codegen<'ctx> {
                 Ok(left)
             }
             AstNodeInner::EqExp { lhs, ops } => {
-                let mut left = self.const_exp_inference(lhs)?;
+                let mut left = self.const_expr_inference(lhs)?;
                 for (op, rhs_node) in ops {
-                    let rhs = self.const_exp_inference(rhs_node)?;
+                    let rhs = self.const_expr_inference(rhs_node)?;
                     left = match op {
                         crate::parser::EqOpInner::Eq => {
                             if left == rhs {
@@ -505,22 +505,22 @@ impl<'ctx> Codegen<'ctx> {
                 Ok(left)
             }
             AstNodeInner::AndExp { lhs, ops } => {
-                let mut left = self.const_exp_inference(lhs)?;
+                let mut left = self.const_expr_inference(lhs)?;
                 for (_op, rhs_node) in ops {
-                    let rhs = self.const_exp_inference(rhs_node)?;
+                    let rhs = self.const_expr_inference(rhs_node)?;
                     left = if left != 0 && rhs != 0 { 1 } else { 0 };
                 }
                 Ok(left)
             }
             AstNodeInner::OrExp { lhs, ops } => {
-                let mut left = self.const_exp_inference(lhs)?;
+                let mut left = self.const_expr_inference(lhs)?;
                 for (_op, rhs_node) in ops {
-                    let rhs = self.const_exp_inference(rhs_node)?;
+                    let rhs = self.const_expr_inference(rhs_node)?;
                     left = if left != 0 || rhs != 0 { 1 } else { 0 };
                 }
                 Ok(left)
             }
-            AstNodeInner::ConstExp(exp) => self.const_exp_inference(exp),
+            AstNodeInner::ConstExp(exp) => self.const_expr_inference(exp),
 
             _ => unreachable!(),
         }
