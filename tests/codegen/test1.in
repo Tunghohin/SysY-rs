@@ -8,9 +8,8 @@ int f = b % a;
 int g = -a;
 int h = +a;
 int i = !a;
-int j = a == a;
-int k = a != b;
-int l = a == b;
+int j = a != b;
+int k = a == b;
 
 int add(int a, int b) {
     return a + b;
@@ -21,5 +20,8 @@ void voidfunc() {
 }
 
 int main() {
+    int a = 233;
+    const int b = 333;
+    int c = 2 * a;
     return c + d;
 }

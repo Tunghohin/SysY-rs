@@ -12,6 +12,7 @@ use crate::parser::ast::{
 use crate::parser::parse;
 
 use self::scope::ScopeStack;
+use crate::codegen::symbol_table::{Symbol, SymbolValue};
 use core::panic;
 use inkwell::OptimizationLevel;
 use inkwell::builder::Builder;
@@ -83,10 +84,7 @@ impl<'ctx> Codegen<'ctx> {
         match val {
             BasicValueEnum::IntValue(iv) => Ok(iv),
             BasicValueEnum::PointerValue(pv) => {
-                let loaded = self
-                    .builder
-                    .build_load(pv, "loadtmp")
-                    .map_err(|e| e.to_string())?;
+                let loaded = self.builder.build_load(pv, "").map_err(|e| e.to_string())?;
                 match loaded {
                     BasicValueEnum::IntValue(iv) => Ok(iv),
                     _ => Err("Expected IntValue after loading from PointerValue".to_string()),
@@ -177,13 +175,37 @@ impl<'ctx> Codegen<'ctx> {
                     .ok_or("Scope stack is empty".to_string())?
                     .define(
                         ident,
-                        crate::codegen::symbol_table::BasicValueEnumWrapper {
-                            inner: global_val.as_basic_value_enum(),
-                            constness: true,
-                        },
+                        Symbol::new(
+                            SymbolValue::Constant {
+                                value: global_val.as_basic_value_enum(),
+                                ty: ty.into(),
+                            },
+                            is_global,
+                        ),
                     )?;
             } else {
-                return Err("Local const not supported yet".to_string());
+                let local_ptr = self
+                    .builder
+                    .build_alloca(ty, "")
+                    .map_err(|e| e.to_string())?;
+                self.builder
+                    .build_store(local_ptr, value)
+                    .map_err(|e| e.to_string())?;
+
+                self.scope_stk
+                    .peek_mut()
+                    .ok_or("Scope stack is empty".to_string())?
+                    .define(
+                        ident,
+                        Symbol::new(
+                            SymbolValue::Variable {
+                                ptr: local_ptr,
+                                ty: ty.into(),
+                                is_const: true,
+                            },
+                            false,
+                        ),
+                    )?;
             }
         }
 
@@ -233,11 +255,11 @@ impl<'ctx> Codegen<'ctx> {
         if !dimensions.is_empty() {
             return Err("Array not supported yet".to_string());
         } else {
-            let init_val = self.const_expr_inference(exp_inner)?;
             let ty = self.ctx.i32_type();
-            let value = ty.const_int(init_val as u64, false);
 
             if is_global {
+                let init_val = self.const_expr_inference(exp_inner)?;
+                let value = ty.const_int(init_val as u64, false);
                 let global_val = self.module.add_global(ty, None, ident.as_str());
                 global_val.set_initializer(&value);
                 global_val.set_constant(false);
@@ -246,13 +268,39 @@ impl<'ctx> Codegen<'ctx> {
                     .ok_or("Scope stack is empty".to_string())?
                     .define(
                         ident,
-                        crate::codegen::symbol_table::BasicValueEnumWrapper {
-                            inner: global_val.as_basic_value_enum(),
-                            constness: false,
-                        },
+                        Symbol::new(
+                            SymbolValue::Variable {
+                                ptr: global_val.as_pointer_value(),
+                                ty: ty.into(),
+                                is_const: false,
+                            },
+                            true,
+                        ),
                     )?;
             } else {
-                return Err("Local const not supported yet".to_string());
+                let value = self.gen_exp(exp_inner)?;
+                let local_ptr = self
+                    .builder
+                    .build_alloca(ty, "")
+                    .map_err(|e| e.to_string())?;
+                self.builder
+                    .build_store(local_ptr, value)
+                    .map_err(|e| e.to_string())?;
+
+                self.scope_stk
+                    .peek_mut()
+                    .ok_or("Scope stack is empty".to_string())?
+                    .define(
+                        ident,
+                        Symbol::new(
+                            SymbolValue::Variable {
+                                ptr: local_ptr,
+                                ty: ty.into(),
+                                is_const: false,
+                            },
+                            false,
+                        ),
+                    )?;
             }
         }
 
@@ -280,17 +328,32 @@ impl<'ctx> Codegen<'ctx> {
             _ => return Err("Unsupported return type".to_string()),
         };
 
-        let param_types = if let Some(params_node) = params {
+        let (param_types, param_names) = if let Some(params_node) = params {
             if let AstNodeInner::FuncFParams(params_list) = params_node.as_inner() {
-                params_list
-                    .iter()
-                    .map(|_| self.ctx.i32_type().into())
-                    .collect::<Vec<BasicMetadataTypeEnum>>()
+                let mut types = Vec::new();
+                let mut names = Vec::new();
+
+                for param in params_list {
+                    if let AstNodeInner::FuncFParam {
+                        btype,
+                        ident,
+                        is_array,
+                        dimensions,
+                    } = param.as_inner()
+                    {
+                        types.push(self.ctx.i32_type().into());
+                        names.push(ident.clone());
+                    } else {
+                        return Err("Invalid function parameter".to_string());
+                    }
+                }
+
+                (types, names)
             } else {
                 return Err("Invalid function parameters".to_string());
             }
         } else {
-            vec![]
+            (vec![], vec![])
         };
 
         let fn_type = if let Some(ret_ty) = ret_type {
@@ -300,37 +363,71 @@ impl<'ctx> Codegen<'ctx> {
         };
 
         let function = self.module.add_function(ident.as_str(), fn_type, None);
+        self.scope_stk
+            .peek_mut()
+            .ok_or("Scope stack is empty".to_string())?
+            .define(ident, Symbol::new(SymbolValue::Function(function), true))?;
 
-        let entry_bb = self.ctx.append_basic_block(function, "entry");
+        // enter parameters scope
+        self.scope_stk.push();
+
+        let entry_bb = self
+            .ctx
+            .append_basic_block(function, format!("{}_entry", ident).as_str());
         self.builder.position_at_end(entry_bb);
+
+        for (i, param_name) in param_names.iter().enumerate() {
+            let param_value = function
+                .get_nth_param(i as u32)
+                .ok_or(format!("Failed to get parameter {}", i))?;
+
+            let param_ptr = self
+                .builder
+                .build_alloca(self.ctx.i32_type(), "")
+                .map_err(|e| format!("Failed to allocate parameter: {:?}", e))?;
+
+            self.builder
+                .build_store(param_ptr, param_value)
+                .map_err(|e| format!("Failed to store parameter value: {:?}", e))?;
+
+            self.scope_stk
+                .peek_mut()
+                .ok_or("Parameter scope is empty".to_string())?
+                .define(
+                    param_name,
+                    Symbol::new(
+                        SymbolValue::Variable {
+                            ptr: param_ptr,
+                            ty: self.ctx.i32_type().into(),
+                            is_const: false,
+                        },
+                        false,
+                    ),
+                )?;
+        }
+
+        // enter function body scope
+        self.scope_stk.push();
 
         let AstNodeInner::Block(items) = body.as_inner() else {
             return Err("Invalid function body".to_string());
         };
-        // for item in items {
-        //     match item.as_inner() {
-        //         AstNodeInner::Decl(_) => self.gen_decl(item, false)?,
-        //         AstNodeInner::Stmt(stmt) => match &**stmt {
-        //             StmtInner::Return(Some(exp)) => {
-        //                 let ret_val = self.gen_exp(exp)?;
-        //                 let ret_int = self.into_int_value_helper(ret_val)?;
-        //                 let _ = self.builder.build_return(Some(&ret_int));
-        //             }
-        //             StmtInner::Return(None) => {
-        //                 let _ = self.builder.build_return(None);
-        //             }
-        //             _ => self.gen_stmt(item)?,
-        //         },
-        //         _ => return Err("Unexpected node in function body".to_string()),
-        //     }
-        // }
-        let _ = self.builder.build_return(Some(
-            &self
-                .ctx
-                .i32_type()
-                .const_int(42, false)
-                .as_basic_value_enum(),
-        ));
+
+        for item in items {
+            let AstNodeInner::BlockItem(block_item) = item.as_inner() else {
+                return Err("Unexpected node in function body".to_string());
+            };
+            match &*block_item.as_inner() {
+                AstNodeInner::Stmt(stmt_inner) => self.gen_stmt(stmt_inner)?,
+                AstNodeInner::Decl(decl) => self.gen_decl(&block_item, false)?,
+                _ => return Err("Unexpected node in function body".to_string()),
+            }
+        }
+
+        // exit function body scope
+        self.scope_stk.pop();
+        // exit parameters scope
+        self.scope_stk.pop();
 
         Ok(())
     }
@@ -342,30 +439,50 @@ impl<'ctx> Codegen<'ctx> {
         Ok(())
     }
 
-    fn gen_stmt(&mut self, node: &AstNode) -> Result<(), String> {
-        let AstNodeInner::Stmt(stmt_inner) = node.as_inner() else {
-            return Err("Invalid Stmt node".to_string());
-        };
-        Ok(())
+    fn gen_stmt(&mut self, stmt_inner: &StmtInner) -> Result<(), String> {
+        match stmt_inner {
+            StmtInner::Return(opt_exp) => {
+                let Some(exp) = opt_exp else {
+                    self.builder.build_return(None).map_err(|e| e.to_string())?;
+                    return Ok(());
+                };
+                let ret_val = self.gen_exp(exp)?;
+                self.builder
+                    .build_return(Some(&ret_val))
+                    .map_err(|e| e.to_string())?;
+                Ok(())
+            }
+            StmtInner::Exp(opt_exp) => {
+                let Some(exp) = opt_exp else {
+                    return Ok(());
+                };
+                let val = self.gen_exp(exp)?;
+
+                Ok(())
+            }
+            StmtInner::Assign { lval, exp } => {
+                let exp_val = self.gen_exp(exp)?;
+                Ok(())
+            }
+            _ => unimplemented!(),
+        }
     }
 
     fn const_expr_inference(&mut self, node: &AstNode) -> Result<i32, String> {
         match node.as_inner() {
             AstNodeInner::Exp(exp) | AstNodeInner::Cond(exp) => self.const_expr_inference(exp),
             AstNodeInner::LVal { ident, dimensions } => {
-                let Some(var) = self
-                    .scope_stk
-                    .peek()
-                    .unwrap_or_else(|| unreachable!())
-                    .resolve(&ident)
-                else {
+                let Some(var) = self.scope_stk.peek().unwrap().resolve(&ident) else {
                     return Err(format!("Undefined variable: {}", ident));
                 };
-                if !var.is_const() {
+                if !var.is_constant() {
                     return Err(format!("Variable {} is not constant", ident));
                 }
-                match var.inner {
-                    BasicValueEnum::PointerValue(pv) => {
+                match var.value {
+                    SymbolValue::Constant { value, ty } => {
+                        let BasicValueEnum::PointerValue(pv) = value else {
+                            return Err("Expected PointerValue for constant".to_string());
+                        };
                         let Some(name) = pv.get_name().to_str().ok() else {
                             return Err("Invalid variable name".to_string());
                         };
@@ -374,18 +491,9 @@ impl<'ctx> Codegen<'ctx> {
                         else {
                             return Err("Failed to get initializer for global variable".to_string());
                         };
-
-                        Ok(iv
-                            .into_int_value()
-                            .get_zero_extended_constant()
-                            .unwrap_or_else(|| unreachable!()) as i32)
+                        Ok(iv.into_int_value().get_zero_extended_constant().unwrap() as i32)
                     }
-                    BasicValueEnum::IntValue(iv) => Ok(iv
-                        .get_zero_extended_constant()
-                        .unwrap_or_else(|| unreachable!())
-                        as i32),
-
-                    _ => unreachable!(),
+                    _ => Err("Unsupported symbol type".to_string()),
                 }
             }
             AstNodeInner::PrimaryExp(primary_inner) => match primary_inner {
@@ -415,7 +523,7 @@ impl<'ctx> Codegen<'ctx> {
                                 }
                             }
                         },
-                        _ => unreachable!(),
+                        _ => Err("Invalid UnaryOp node".to_string())?,
                     };
                     Ok(result)
                 }
@@ -522,7 +630,7 @@ impl<'ctx> Codegen<'ctx> {
             }
             AstNodeInner::ConstExp(exp) => self.const_expr_inference(exp),
 
-            _ => unreachable!(),
+            _ => Err("Unsupported expression type".to_string()),
         }
     }
 
@@ -549,11 +657,11 @@ impl<'ctx> Codegen<'ctx> {
                         UnaryOpInner::Plus => rhs_int,
                         UnaryOpInner::Minus => self
                             .builder
-                            .build_int_neg(rhs_int, "negtmp")
+                            .build_int_neg(rhs_int, "")
                             .map_err(|e| e.to_string())?,
                         UnaryOpInner::Not => self
                             .builder
-                            .build_not(rhs_int, "nottmp")
+                            .build_not(rhs_int, "")
                             .map_err(|e| e.to_string())?,
                     };
 
@@ -570,17 +678,17 @@ impl<'ctx> Codegen<'ctx> {
                     left = match op {
                         MulOpInner::Mul => self
                             .builder
-                            .build_int_mul(lhs_val, rhs_val, "multmp")
+                            .build_int_mul(lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                         MulOpInner::Div => self
                             .builder
-                            .build_int_signed_div(lhs_val, rhs_val, "divtmp")
+                            .build_int_signed_div(lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                         MulOpInner::Mod => self
                             .builder
-                            .build_int_signed_rem(lhs_val, rhs_val, "modtmp")
+                            .build_int_signed_rem(lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                     }
@@ -596,12 +704,12 @@ impl<'ctx> Codegen<'ctx> {
                     left = match op {
                         AddOpInner::Plus => self
                             .builder
-                            .build_int_add(lhs_val, rhs_val, "addtmp")
+                            .build_int_add(lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                         AddOpInner::Minus => self
                             .builder
-                            .build_int_sub(lhs_val, rhs_val, "subtmp")
+                            .build_int_sub(lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                     }
@@ -617,42 +725,22 @@ impl<'ctx> Codegen<'ctx> {
                     left = match op {
                         RelOpInner::Lt => self
                             .builder
-                            .build_int_compare(
-                                inkwell::IntPredicate::SLT,
-                                lhs_val,
-                                rhs_val,
-                                "lttmp",
-                            )
+                            .build_int_compare(inkwell::IntPredicate::SLT, lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                         RelOpInner::Gt => self
                             .builder
-                            .build_int_compare(
-                                inkwell::IntPredicate::SGT,
-                                lhs_val,
-                                rhs_val,
-                                "gttmp",
-                            )
+                            .build_int_compare(inkwell::IntPredicate::SGT, lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                         RelOpInner::Le => self
                             .builder
-                            .build_int_compare(
-                                inkwell::IntPredicate::SLE,
-                                lhs_val,
-                                rhs_val,
-                                "letmp",
-                            )
+                            .build_int_compare(inkwell::IntPredicate::SLE, lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                         RelOpInner::Ge => self
                             .builder
-                            .build_int_compare(
-                                inkwell::IntPredicate::SGE,
-                                lhs_val,
-                                rhs_val,
-                                "getmp",
-                            )
+                            .build_int_compare(inkwell::IntPredicate::SGE, lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                     }
@@ -668,12 +756,12 @@ impl<'ctx> Codegen<'ctx> {
                     left = match op {
                         crate::parser::EqOpInner::Eq => self
                             .builder
-                            .build_int_compare(inkwell::IntPredicate::EQ, lhs_val, rhs_val, "eqtmp")
+                            .build_int_compare(inkwell::IntPredicate::EQ, lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                         crate::parser::EqOpInner::Neq => self
                             .builder
-                            .build_int_compare(inkwell::IntPredicate::NE, lhs_val, rhs_val, "netmp")
+                            .build_int_compare(inkwell::IntPredicate::NE, lhs_val, rhs_val, "")
                             .map_err(|e| e.to_string())?
                             .as_basic_value_enum(),
                     }
@@ -688,7 +776,7 @@ impl<'ctx> Codegen<'ctx> {
                     let rhs_val = self.into_int_value_helper(rhs)?;
                     left = self
                         .builder
-                        .build_and(lhs_val, rhs_val, "andtmp")
+                        .build_and(lhs_val, rhs_val, "")
                         .map_err(|e| e.to_string())?
                         .as_basic_value_enum();
                 }
@@ -702,7 +790,7 @@ impl<'ctx> Codegen<'ctx> {
                     let rhs_val = self.into_int_value_helper(rhs)?;
                     left = self
                         .builder
-                        .build_or(lhs_val, rhs_val, "ortmp")
+                        .build_or(lhs_val, rhs_val, "")
                         .map_err(|e| e.to_string())?
                         .as_basic_value_enum();
                 }
@@ -718,15 +806,18 @@ impl<'ctx> Codegen<'ctx> {
         ident: &String,
         dimensions: &Vec<Box<AstNode>>,
     ) -> Result<BasicValueEnum<'ctx>, String> {
-        match self
-            .scope_stk
-            .peek()
-            .unwrap_or_else(|| unreachable!())
-            .resolve(&ident)
-        {
-            Some(var) => {
-                return Ok(var.inner.clone());
-            }
+        match self.scope_stk.peek().unwrap().resolve(&ident) {
+            Some(var) => match var.value {
+                SymbolValue::Variable { ptr, ty, .. } => {
+                    let loaded = self
+                        .builder
+                        .build_load(ptr, "")
+                        .map_err(|e| e.to_string())?;
+                    Ok(loaded)
+                }
+                SymbolValue::Constant { value, ty } => Ok(value),
+                _ => Err("Unsupported symbol type".to_string()),
+            },
             None => return Err(format!("Undefined variable: {}", ident)),
         }
     }
@@ -785,5 +876,6 @@ fn codegen() {
     codegen
         .gen_comp_unit(&ast)
         .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
+    codegen.execute();
     codegen.print_to_stderr();
 }

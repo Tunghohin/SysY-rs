@@ -1,4 +1,4 @@
-use crate::codegen::symbol_table::BasicValueEnumWrapper;
+use crate::codegen::symbol_table::Symbol;
 use crate::codegen::symbol_table::SymbolTable;
 use inkwell::values::BasicValueEnum;
 
@@ -25,15 +25,11 @@ impl<'ctx> Scope<'ctx> {
         }
     }
 
-    pub fn define(
-        &mut self,
-        name: &String,
-        val_enum: BasicValueEnumWrapper<'ctx>,
-    ) -> Result<(), String> {
+    pub fn define(&mut self, name: &String, val_enum: Symbol<'ctx>) -> Result<(), String> {
         self.symtb.define(name, val_enum)
     }
 
-    pub fn resolve(&self, name: &String) -> Option<&BasicValueEnumWrapper<'ctx>> {
+    pub fn resolve(&self, name: &String) -> Option<&Symbol<'ctx>> {
         if let Some(var) = self.symtb.resolve(name) {
             Some(var)
         } else if let Some(ref parent) = self.parent {
