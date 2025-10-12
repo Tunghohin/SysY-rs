@@ -23,5 +23,8 @@ int main() {
     int a = 233;
     const int b = 333;
     int c = 2 * a;
-    return c + d;
+    int d = 344;
+    c = a + b;
+    d = add(a * c, b * 2);
+    return (c + d) % 256;
 }

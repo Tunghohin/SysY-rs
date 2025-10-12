@@ -63,7 +63,7 @@ impl<'ctx> Codegen<'ctx> {
         let _ = self.builder.build_return(Some(&ret_val));
     }
 
-    pub fn execute(&self) {
+    pub fn execute(&self) -> i32 {
         let engine = self
             .module
             .create_jit_execution_engine(OptimizationLevel::None)
@@ -72,7 +72,7 @@ impl<'ctx> Codegen<'ctx> {
             let main = engine
                 .get_function::<unsafe extern "C" fn() -> i32>("main")
                 .unwrap();
-            println!("Program returned: {}", main.call());
+            main.call()
         }
     }
 
@@ -462,8 +462,26 @@ impl<'ctx> Codegen<'ctx> {
             }
             StmtInner::Assign { lval, exp } => {
                 let exp_val = self.gen_exp(exp)?;
+                let AstNodeInner::LVal { ident, dimensions } = &(*lval).as_inner() else {
+                    return Err("Invalid LVal in assignment".to_string());
+                };
+                let lval_ptr = match self.scope_stk.peek().unwrap().resolve(ident) {
+                    Some(var) => match var.value {
+                        SymbolValue::Variable { ptr, .. } => ptr,
+                        SymbolValue::Constant { .. } => {
+                            return Err(format!("Cannot assign to constant variable: {}", ident));
+                        }
+                        _ => return Err("Unsupported symbol type".to_string()),
+                    },
+                    None => return Err(format!("Undefined variable: {}", ident)),
+                };
+                self.builder
+                    .build_store(lval_ptr, exp_val)
+                    .map_err(|e| e.to_string())?;
+
                 Ok(())
             }
+
             _ => unimplemented!(),
         }
     }
@@ -667,7 +685,38 @@ impl<'ctx> Codegen<'ctx> {
 
                     Ok(result.as_basic_value_enum())
                 }
-                _ => Err("Unimplemented unary expression".to_string()),
+                UnaryExpInner::FuncCall { ident, args } => {
+                    let func = {
+                        let Some(Symbol {
+                            value: SymbolValue::Function(func),
+                            ..
+                        }) = self.scope_stk.peek().unwrap().resolve(ident)
+                        else {
+                            return Err(format!("Undefined function: {}", ident));
+                        };
+                        *func
+                    };
+
+                    let arg_values = if let Some(arg_nodes) = args {
+                        let mut values = Vec::new();
+                        for arg_node in arg_nodes {
+                            let val = self.gen_exp(arg_node)?;
+                            values.push(val.into());
+                        }
+                        values
+                    } else {
+                        vec![]
+                    };
+
+                    let call_site = self
+                        .builder
+                        .build_call(func, &arg_values, "")
+                        .map_err(|e| e.to_string())?;
+                    match func.get_type().get_return_type() {
+                        Some(_ret_ty) => Ok(call_site.try_as_basic_value().left().unwrap()),
+                        None => Ok(self.ctx.i32_type().const_int(0, false).into()), // void function returns 0
+                    }
+                }
             },
             AstNodeInner::MulExp { lhs, ops } => {
                 let mut left = self.gen_exp(lhs)?;
@@ -876,6 +925,6 @@ fn codegen() {
     codegen
         .gen_comp_unit(&ast)
         .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
-    codegen.execute();
+    println!("Executed with return value: {}", codegen.execute());
     codegen.print_to_stderr();
 }
