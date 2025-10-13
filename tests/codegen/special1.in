@@ -1,0 +1,7 @@
+
+const int N = 3;
+
+int main() {
+    N = 2 * N;
+    return N;
+}
