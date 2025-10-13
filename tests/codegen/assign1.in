@@ -1,0 +1,6 @@
+int N;
+
+int main() {
+    int N = 2;
+    return N;
+}

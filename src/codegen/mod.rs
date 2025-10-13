@@ -275,10 +275,6 @@ impl<'ctx> Codegen<'ctx> {
             return Err("Only int type is supported".to_string());
         }
 
-        let Some(init_val) = init_val else {
-            return Err("Uninitialized variable is not supported yet".to_string());
-        };
-
         if !dimensions.is_empty() {
             let totol_size = dimensions
                 .iter()
@@ -294,17 +290,25 @@ impl<'ctx> Codegen<'ctx> {
                     .map_err(|e| e.to_string())?;
             }
         } else {
-            let AstNodeInner::InitVal(InitValInner::ConstExp(exp_inner)) = init_val.as_inner()
-            else {
-                return Err("Only Exp is supported in InitVal".to_string());
-            };
             let ty = self.ctx.i32_type();
 
             if is_global {
-                let init_val = self.const_expr_inference(exp_inner)?;
-                let value = ty.const_int(init_val as u64, false);
                 let global_val = self.module.add_global(ty, None, ident.as_str());
-                global_val.set_initializer(&value);
+                if init_val.is_some() {
+                    let init_val = init_val.as_ref().unwrap();
+                    let AstNodeInner::InitVal(InitValInner::ConstExp(exp_inner)) =
+                        init_val.as_inner()
+                    else {
+                        return Err("Only ConstExp is supported in InitVal".to_string());
+                    };
+                    let init_val = self.const_expr_inference(exp_inner)?;
+                    let value = ty.const_int(init_val as u64, false);
+                    global_val.set_initializer(&value);
+                } else {
+                    let init_val = ty.const_int(0, false);
+                    global_val.set_initializer(&init_val);
+                }
+
                 global_val.set_constant(false);
                 self.scope_stk
                     .peek_mut()
@@ -321,14 +325,22 @@ impl<'ctx> Codegen<'ctx> {
                         ),
                     )?;
             } else {
-                let value = self.gen_exp(exp_inner)?;
                 let local_ptr = self
                     .builder
                     .build_alloca(ty, "")
                     .map_err(|e| e.to_string())?;
-                self.builder
-                    .build_store(local_ptr, value)
-                    .map_err(|e| e.to_string())?;
+                if init_val.is_some() {
+                    let init_val = init_val.as_ref().unwrap();
+                    let AstNodeInner::InitVal(InitValInner::ConstExp(exp_inner)) =
+                        init_val.as_inner()
+                    else {
+                        return Err("Only ConstExp is supported in InitVal".to_string());
+                    };
+                    let value = self.gen_exp(exp_inner)?;
+                    self.builder
+                        .build_store(local_ptr, value)
+                        .map_err(|e| e.to_string())?;
+                }
 
                 self.scope_stk
                     .peek_mut()
@@ -1346,7 +1358,7 @@ fn codegen_dummy() {
 
 #[test]
 fn codegen() {
-    let src = std::fs::read_to_string("tests/codegen/special1.in").unwrap_or_default();
+    let src = std::fs::read_to_string("tests/codegen/sample6.in").unwrap_or_default();
     let ast = parse(&src, BuildConfig::default())
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));
