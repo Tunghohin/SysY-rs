@@ -1,0 +1,11 @@
+int f(int a, int b) {
+    if (a != 0 && b / a > 2)
+        return 1;
+    if (a == 0 || b == 0)
+        return 2;
+    return 3;
+}
+
+int main() {
+    return (f(0, 1) + f(2, 10) * 10 + f(3, 5) * 100);
+}

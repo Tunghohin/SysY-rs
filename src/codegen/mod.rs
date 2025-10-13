@@ -984,32 +984,227 @@ impl<'ctx> Codegen<'ctx> {
                 Ok(left)
             }
             AstNodeInner::AndExp { lhs, ops } => {
-                let mut left = self.gen_exp(lhs)?;
-                for (_op, rhs_node) in ops {
-                    let rhs = self.gen_exp(rhs_node)?;
-                    let lhs_val = self.into_int_value_helper(left)?;
-                    let rhs_val = self.into_int_value_helper(rhs)?;
-                    left = self
-                        .builder
-                        .build_and(lhs_val, rhs_val, "")
-                        .map_err(|e| e.to_string())?
-                        .as_basic_value_enum();
+                if ops.is_empty() {
+                    return self.gen_exp(lhs);
                 }
-                Ok(left)
+
+                let parent_fn = self
+                    .builder
+                    .get_insert_block()
+                    .and_then(|b| b.get_parent())
+                    .ok_or("Failed to get parent function".to_string())?;
+
+                let merge_bb = self.ctx.append_basic_block(parent_fn, "and_merge");
+
+                let mut phi_incoming = Vec::new();
+
+                let mut current_val = self.gen_exp(lhs)?;
+                let mut current_int = self.into_int_value_helper(current_val)?;
+
+                if current_int.get_type().get_bit_width() == 1 {
+                    current_int = self
+                        .builder
+                        .build_int_z_extend(current_int, self.ctx.i32_type(), "zext")
+                        .map_err(|e| e.to_string())?;
+                }
+
+                for (i, (_op, rhs_node)) in ops.iter().enumerate() {
+                    let current_cond = self
+                        .builder
+                        .build_int_compare(
+                            inkwell::IntPredicate::NE,
+                            current_int,
+                            self.ctx.i32_type().const_int(0, false),
+                            "and_cond",
+                        )
+                        .map_err(|e| e.to_string())?;
+
+                    let current_block = self.builder.get_insert_block().unwrap();
+
+                    if i == ops.len() - 1 {
+                        let rhs_bb = self.ctx.append_basic_block(parent_fn, "and_rhs");
+
+                        self.builder
+                            .build_conditional_branch(current_cond, rhs_bb, merge_bb)
+                            .map_err(|e| e.to_string())?;
+
+                        phi_incoming.push((current_int, current_block));
+
+                        self.builder.position_at_end(rhs_bb);
+                        let rhs_val = self.gen_exp(rhs_node)?;
+                        let mut rhs_int = self.into_int_value_helper(rhs_val)?;
+
+                        if rhs_int.get_type().get_bit_width() == 1 {
+                            rhs_int = self
+                                .builder
+                                .build_int_z_extend(rhs_int, self.ctx.i32_type(), "zext")
+                                .map_err(|e| e.to_string())?;
+                        }
+
+                        let rhs_block = self.builder.get_insert_block().unwrap();
+                        phi_incoming.push((rhs_int, rhs_block));
+
+                        self.builder
+                            .build_unconditional_branch(merge_bb)
+                            .map_err(|e| e.to_string())?;
+                    } else {
+                        let continue_bb = self.ctx.append_basic_block(parent_fn, "and_continue");
+
+                        self.builder
+                            .build_conditional_branch(current_cond, continue_bb, merge_bb)
+                            .map_err(|e| e.to_string())?;
+
+                        phi_incoming.push((current_int, current_block));
+
+                        self.builder.position_at_end(continue_bb);
+                        let next_val = self.gen_exp(rhs_node)?;
+                        current_int = self.into_int_value_helper(next_val)?;
+
+                        if current_int.get_type().get_bit_width() == 1 {
+                            current_int = self
+                                .builder
+                                .build_int_z_extend(current_int, self.ctx.i32_type(), "zext")
+                                .map_err(|e| e.to_string())?;
+                        }
+
+                        current_val = current_int.as_basic_value_enum();
+                    }
+                }
+
+                self.builder.position_at_end(merge_bb);
+                let phi = self
+                    .builder
+                    .build_phi(self.ctx.i32_type(), "and_result")
+                    .map_err(|e| e.to_string())?;
+
+                for (value, block) in phi_incoming {
+                    phi.add_incoming(&[(&value, block)]);
+                }
+
+                let result = phi.as_basic_value().into_int_value();
+                let bool_result = self
+                    .builder
+                    .build_int_compare(
+                        inkwell::IntPredicate::NE,
+                        result,
+                        self.ctx.i32_type().const_int(0, false),
+                        "and_bool",
+                    )
+                    .map_err(|e| e.to_string())?;
+
+                Ok(bool_result.as_basic_value_enum())
             }
+
             AstNodeInner::OrExp { lhs, ops } => {
-                let mut left = self.gen_exp(lhs)?;
-                for (_op, rhs_node) in ops {
-                    let rhs = self.gen_exp(rhs_node)?;
-                    let lhs_val = self.into_int_value_helper(left)?;
-                    let rhs_val = self.into_int_value_helper(rhs)?;
-                    left = self
-                        .builder
-                        .build_or(lhs_val, rhs_val, "")
-                        .map_err(|e| e.to_string())?
-                        .as_basic_value_enum();
+                if ops.is_empty() {
+                    return self.gen_exp(lhs);
                 }
-                Ok(left)
+
+                let parent_fn = self
+                    .builder
+                    .get_insert_block()
+                    .and_then(|b| b.get_parent())
+                    .ok_or("Failed to get parent function".to_string())?;
+
+                let merge_bb = self.ctx.append_basic_block(parent_fn, "or_merge");
+
+                let mut phi_incoming = Vec::new();
+
+                let mut current_val = self.gen_exp(lhs)?;
+                let mut current_int = self.into_int_value_helper(current_val)?;
+
+                if current_int.get_type().get_bit_width() == 1 {
+                    current_int = self
+                        .builder
+                        .build_int_z_extend(current_int, self.ctx.i32_type(), "zext")
+                        .map_err(|e| e.to_string())?;
+                }
+
+                for (i, (_op, rhs_node)) in ops.iter().enumerate() {
+                    let current_cond = self
+                        .builder
+                        .build_int_compare(
+                            inkwell::IntPredicate::EQ,
+                            current_int,
+                            self.ctx.i32_type().const_int(0, false),
+                            "or_cond",
+                        )
+                        .map_err(|e| e.to_string())?;
+
+                    let current_block = self.builder.get_insert_block().unwrap();
+
+                    if i == ops.len() - 1 {
+                        let rhs_bb = self.ctx.append_basic_block(parent_fn, "or_rhs");
+
+                        self.builder
+                            .build_conditional_branch(current_cond, rhs_bb, merge_bb)
+                            .map_err(|e| e.to_string())?;
+
+                        phi_incoming.push((current_int, current_block));
+
+                        self.builder.position_at_end(rhs_bb);
+                        let rhs_val = self.gen_exp(rhs_node)?;
+                        let mut rhs_int = self.into_int_value_helper(rhs_val)?;
+
+                        if rhs_int.get_type().get_bit_width() == 1 {
+                            rhs_int = self
+                                .builder
+                                .build_int_z_extend(rhs_int, self.ctx.i32_type(), "zext")
+                                .map_err(|e| e.to_string())?;
+                        }
+
+                        let rhs_block = self.builder.get_insert_block().unwrap();
+                        phi_incoming.push((rhs_int, rhs_block));
+
+                        self.builder
+                            .build_unconditional_branch(merge_bb)
+                            .map_err(|e| e.to_string())?;
+                    } else {
+                        let continue_bb = self.ctx.append_basic_block(parent_fn, "or_continue");
+
+                        self.builder
+                            .build_conditional_branch(current_cond, continue_bb, merge_bb)
+                            .map_err(|e| e.to_string())?;
+
+                        phi_incoming.push((current_int, current_block));
+
+                        self.builder.position_at_end(continue_bb);
+                        let next_val = self.gen_exp(rhs_node)?;
+                        current_int = self.into_int_value_helper(next_val)?;
+
+                        if current_int.get_type().get_bit_width() == 1 {
+                            current_int = self
+                                .builder
+                                .build_int_z_extend(current_int, self.ctx.i32_type(), "zext")
+                                .map_err(|e| e.to_string())?;
+                        }
+
+                        current_val = current_int.as_basic_value_enum();
+                    }
+                }
+
+                self.builder.position_at_end(merge_bb);
+                let phi = self
+                    .builder
+                    .build_phi(self.ctx.i32_type(), "or_result")
+                    .map_err(|e| e.to_string())?;
+
+                for (value, block) in phi_incoming {
+                    phi.add_incoming(&[(&value, block)]);
+                }
+
+                let result = phi.as_basic_value().into_int_value();
+                let bool_result = self
+                    .builder
+                    .build_int_compare(
+                        inkwell::IntPredicate::NE,
+                        result,
+                        self.ctx.i32_type().const_int(0, false),
+                        "or_bool",
+                    )
+                    .map_err(|e| e.to_string())?;
+
+                Ok(bool_result.as_basic_value_enum())
             }
 
             _ => Err("Unimplemented expression type".to_string()),

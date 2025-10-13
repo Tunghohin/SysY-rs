@@ -1,0 +1,9 @@
+int main() {
+    int a = 0;
+    if (!(a != 0)) {
+        a = 123;
+    } else {
+        a = 456;
+    }
+    return a;
+}

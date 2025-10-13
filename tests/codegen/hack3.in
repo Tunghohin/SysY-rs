@@ -1,0 +1,13 @@
+int f(int n) {
+    int i = 0;
+    while (i < n) {
+        if (i * i > n)
+            return i;
+        i = i + 1;
+    }
+    return -1;
+}
+
+int main() {
+    return f(100);
+}
