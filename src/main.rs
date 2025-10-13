@@ -22,5 +22,8 @@ fn main() {
     codegen
         .gen_ir(&ast)
         .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
-    println!("{}", codegen.print_to_string().to_string());
+
+    let output = args.get(2).cloned().unwrap_or("output.ll".to_string());
+    fs::write(&output, codegen.print_to_string())
+        .unwrap_or_else(|e| panic!("Failed to write LLVM IR to file: {}", e));
 }
