@@ -1,0 +1,23 @@
+const int LIMIT = 10;
+
+int f(int x) {
+    if (x < 0) {
+        return -x;
+    } else if (x == 0) {
+        return 42;
+    };
+}
+
+int g(int x) {
+    if (x < 0) {
+        return -x;
+    } else if (x == 0) {
+        return 42;
+    } else {
+        return x + LIMIT;
+    }
+}
+
+int main() {
+    return f(2) + g(-3) * 10;
+}

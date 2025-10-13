@@ -480,6 +480,18 @@ impl<'ctx> Codegen<'ctx> {
             {
                 self.builder.build_return(None).map_err(|e| e.to_string())?;
             }
+        } else {
+            if self
+                .builder
+                .get_insert_block()
+                .unwrap()
+                .get_terminator()
+                .is_none()
+            {
+                self.builder
+                    .build_return(Some(&self.ctx.i32_type().const_int(0, false)))
+                    .map_err(|e| e.to_string())?;
+            }
         }
 
         // exit parameters scope
@@ -548,10 +560,10 @@ impl<'ctx> Codegen<'ctx> {
                 } else {
                     None
                 };
-                let merge_bb = self.ctx.append_basic_block(parent_fn, "next");
 
                 let cond_val = self.gen_exp(cond)?;
                 let cond_val = cond_val.into_int_value();
+                let merge_bb = self.ctx.append_basic_block(parent_fn, "next");
 
                 if let Some(else_bb) = else_bb {
                     self.builder
@@ -1325,7 +1337,7 @@ fn codegen_dummy() {
 
 #[test]
 fn codegen() {
-    let src = std::fs::read_to_string("tests/codegen/array1.in").unwrap_or_default();
+    let src = std::fs::read_to_string("tests/codegen/hack8.in").unwrap_or_default();
     let ast = parse(&src, BuildConfig::default())
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));

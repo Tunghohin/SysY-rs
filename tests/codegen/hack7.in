@@ -1,0 +1,72 @@
+// ultimate_test.sy
+
+const int LIMIT = 10;
+
+int add(int a, int b) { return a + b; }
+
+int mul(int a, int b) {
+    int s = 0;
+    int i = 0;
+    while (i < b) {
+        if (i == 5)
+            break;
+        if (i % 2 == 0) {
+            s = s + a;
+        } else {
+            s = s + a + 1;
+        }
+        i = i + 1;
+    }
+    return s;
+}
+
+int f(int n) {
+    int res = 0;
+    int i = 0;
+    while (i < n) {
+        if (i == 3) {
+            i = i + 1;
+            continue;
+        }
+        if (i > LIMIT)
+            break;
+        res = res + mul(i, n - i);
+        i = i + 1;
+    }
+    return res;
+}
+
+int g(int x) {
+    if (x < 0) {
+        return -x;
+    } else if (x == 0) {
+        return 42;
+    } else {
+        return x + LIMIT;
+    }
+}
+
+int main() {
+    int a = 3, b = 4, c = 0;
+    int d = add(a, b);
+    c = mul(d, 2);
+
+    int sum = f(c);
+    int v = g(sum - 50);
+
+    if (v != 0 && sum > 10) {
+        sum = sum + v;
+    } else if (v == 0 || sum < 5) {
+        sum = sum * 2;
+    } else {
+        sum = sum - v;
+    }
+
+    while (sum < 500) {
+        sum = sum + 7;
+        if (sum % 13 == 0)
+            break;
+    }
+
+    return sum;
+}
