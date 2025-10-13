@@ -26,5 +26,5 @@ int main() {
     int d = 344;
     c = a + b;
     d = add(a * c, b * 2);
-    return (c + d) % 256;
+    return (c + d) % 255;
 }

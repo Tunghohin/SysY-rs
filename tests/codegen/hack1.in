@@ -5,5 +5,5 @@ int main() {
     } else {
         a = 456;
     }
-    return a;
+    return (a) % 255;
 }

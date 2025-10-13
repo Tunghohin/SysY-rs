@@ -3,6 +3,7 @@
 pub mod scope;
 pub mod symbol_table;
 
+use crate::parser;
 use crate::parser::BuildConfig;
 use crate::parser::PrimaryExpInner;
 use crate::parser::ast::{
@@ -162,23 +163,37 @@ impl<'ctx> Codegen<'ctx> {
             return Err("Invalid ConstDef node".to_string());
         };
 
-        if !dimensions.is_empty() {
-            return Err("Array not supported yet".to_string());
-        }
-
         if !matches!(btype.as_inner(), AstNodeInner::BType(t) if t == "int") {
             return Err("Only int type is supported".to_string());
         }
 
-        let AstNodeInner::ConstInitVal(ConstInitValInner::ConstExp(exp_inner)) =
-            init_val.as_inner()
-        else {
-            return Err("Only ConstExp is supported in ConstInitVal".to_string());
-        };
-
         if !dimensions.is_empty() {
-            return Err("Array not supported yet".to_string());
+            let AstNodeInner::ConstInitVal(ConstInitValInner::InitList(list_inner)) =
+                init_val.as_inner()
+            else {
+                return Err("Only InitList is supported in ConstInitVal for arrays".to_string());
+            };
+
+            let totol_size = dimensions
+                .iter()
+                .map(|node| self.const_expr_inference(node).unwrap() as u32)
+                .product::<u32>();
+            let ty = self.ctx.i32_type().array_type(totol_size as u32);
+            if is_global {
+                let global_val = self.module.add_global(ty, None, ident.as_str());
+            } else {
+                let local_ptr = self
+                    .builder
+                    .build_alloca(ty, "")
+                    .map_err(|e| e.to_string())?;
+            }
         } else {
+            let AstNodeInner::ConstInitVal(ConstInitValInner::ConstExp(exp_inner)) =
+                init_val.as_inner()
+            else {
+                return Err("Only ConstExp is supported in ConstInitVal".to_string());
+            };
+
             let init_val = self.const_expr_inference(exp_inner)?;
             let ty = self.ctx.i32_type();
             let value = ty.const_int(init_val as u64, false);
@@ -255,9 +270,6 @@ impl<'ctx> Codegen<'ctx> {
             return Err("Invalid VarDef node".to_string());
         };
 
-        if !dimensions.is_empty() {
-            return Err("Array not supported yet".to_string());
-        }
         if !matches!(btype.as_inner(), AstNodeInner::BType(t) if t == "int") {
             return Err("Only int type is supported".to_string());
         }
@@ -265,13 +277,26 @@ impl<'ctx> Codegen<'ctx> {
         let Some(init_val) = init_val else {
             return Err("Uninitialized variable is not supported yet".to_string());
         };
-        let AstNodeInner::InitVal(InitValInner::ConstExp(exp_inner)) = init_val.as_inner() else {
-            return Err("Only Exp is supported in InitVal".to_string());
-        };
 
         if !dimensions.is_empty() {
-            return Err("Array not supported yet".to_string());
+            let totol_size = dimensions
+                .iter()
+                .map(|node| self.const_expr_inference(node).unwrap() as u32)
+                .product::<u32>();
+            let ty = self.ctx.i32_type().array_type(totol_size as u32);
+            if is_global {
+                let global_val = self.module.add_global(ty, None, ident.as_str());
+            } else {
+                let local_ptr = self
+                    .builder
+                    .build_alloca(ty, "")
+                    .map_err(|e| e.to_string())?;
+            }
         } else {
+            let AstNodeInner::InitVal(InitValInner::ConstExp(exp_inner)) = init_val.as_inner()
+            else {
+                return Err("Only Exp is supported in InitVal".to_string());
+            };
             let ty = self.ctx.i32_type();
 
             if is_global {
@@ -1300,14 +1325,17 @@ fn codegen_dummy() {
 
 #[test]
 fn codegen() {
-    let src = std::fs::read_to_string("tests/codegen/sample6.in").unwrap_or_default();
+    let src = std::fs::read_to_string("tests/codegen/array1.in").unwrap_or_default();
     let ast = parse(&src, BuildConfig::default())
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));
+
+    parser::display_ast(&src);
+
     let context = Context::create();
     let mut codegen = Codegen::new("module", &context);
     codegen
-        .gen_comp_unit(&ast)
+        .gen_ir(&ast)
         .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
 
     codegen.print_to_stderr();
