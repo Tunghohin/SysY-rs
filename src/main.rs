@@ -14,10 +14,13 @@ fn main() {
         std::process::exit(1);
     }
     let input = fs::read_to_string(&args[1]).expect("Failed to read file");
-    let _ = parser::parse(&input, parser::BuildConfig::default()).map_or_else(
-        |e| eprintln!("{}", e),
-        |_| {
-            eprintln!("No semantic errors in the program!");
-        },
-    );
+    let ast = parser::parse(&input, parser::BuildConfig::default())
+        .map_err(|e| println!("{}", e))
+        .unwrap_or_else(|_| panic!("Failed to parse source code"));
+    let context = inkwell::context::Context::create();
+    let mut codegen = codegen::Codegen::new("module", &context);
+    codegen
+        .gen_ir(&ast)
+        .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
+    println!("{}", codegen.print_to_string().to_string());
 }

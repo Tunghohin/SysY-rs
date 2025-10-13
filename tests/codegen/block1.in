@@ -1,0 +1,9 @@
+int main() {
+    int a = 233;
+    {
+        int a = 466;
+        a = a + 1;
+    }
+    a = a + 1;
+    return (a) % 256;
+}

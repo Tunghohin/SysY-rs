@@ -25,11 +25,18 @@ use inkwell::values::{
 use std::collections::HashMap;
 use std::rc::Rc;
 
+#[derive(Debug, Clone)]
+struct LoopCtx<'ctx> {
+    cond_bb: inkwell::basic_block::BasicBlock<'ctx>,
+    after_bb: inkwell::basic_block::BasicBlock<'ctx>,
+}
+
 pub struct Codegen<'ctx> {
     ctx: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
     scope_stk: ScopeStack<'ctx>,
+    loop_stk: Vec<LoopCtx<'ctx>>,
 }
 
 impl<'ctx> Codegen<'ctx> {
@@ -41,6 +48,7 @@ impl<'ctx> Codegen<'ctx> {
             module,
             builder,
             scope_stk: ScopeStack::default(),
+            loop_stk: Vec::new(),
         }
     }
 
@@ -63,21 +71,26 @@ impl<'ctx> Codegen<'ctx> {
         let _ = self.builder.build_return(Some(&ret_val));
     }
 
-    pub fn execute(&self) -> i32 {
+    pub fn execute(&self) -> Result<i32, String> {
         let engine = self
             .module
             .create_jit_execution_engine(OptimizationLevel::None)
-            .unwrap();
+            .map_err(|e| e.to_string())?;
+        self.module.verify().map_err(|e| e.to_string())?;
         unsafe {
             let main = engine
                 .get_function::<unsafe extern "C" fn() -> i32>("main")
-                .unwrap();
-            main.call()
+                .map_err(|e| e.to_string())?;
+            Ok(main.call())
         }
     }
 
     pub fn print_to_stderr(&self) {
         self.module.print_to_stderr();
+    }
+
+    pub fn print_to_string(&self) -> String {
+        self.module.print_to_string().to_string()
     }
 
     fn into_int_value_helper(&self, val: BasicValueEnum<'ctx>) -> Result<IntValue<'ctx>, String> {
@@ -92,6 +105,10 @@ impl<'ctx> Codegen<'ctx> {
             }
             _ => Err("Expected IntValue".to_string()),
         }
+    }
+
+    pub fn gen_ir(&mut self, ast: &AstNode) -> Result<(), String> {
+        self.gen_comp_unit(ast)
     }
 
     fn gen_comp_unit(&mut self, node: &AstNode) -> Result<(), String> {
@@ -426,40 +443,28 @@ impl<'ctx> Codegen<'ctx> {
 
         // exit function body scope
         self.scope_stk.pop();
+
+        // void return if no return statement
+        if ret_type.is_none() {
+            if self
+                .builder
+                .get_insert_block()
+                .unwrap()
+                .get_terminator()
+                .is_none()
+            {
+                self.builder.build_return(None).map_err(|e| e.to_string())?;
+            }
+        }
+
         // exit parameters scope
         self.scope_stk.pop();
 
         Ok(())
     }
 
-    fn gen_block(&mut self, node: &AstNode) -> Result<(), String> {
-        let AstNodeInner::Block(stmts) = node.as_inner() else {
-            return Err("Invalid Block node".to_string());
-        };
-        Ok(())
-    }
-
     fn gen_stmt(&mut self, stmt_inner: &StmtInner) -> Result<(), String> {
         match stmt_inner {
-            StmtInner::Return(opt_exp) => {
-                let Some(exp) = opt_exp else {
-                    self.builder.build_return(None).map_err(|e| e.to_string())?;
-                    return Ok(());
-                };
-                let ret_val = self.gen_exp(exp)?;
-                self.builder
-                    .build_return(Some(&ret_val))
-                    .map_err(|e| e.to_string())?;
-                Ok(())
-            }
-            StmtInner::Exp(opt_exp) => {
-                let Some(exp) = opt_exp else {
-                    return Ok(());
-                };
-                let val = self.gen_exp(exp)?;
-
-                Ok(())
-            }
             StmtInner::Assign { lval, exp } => {
                 let exp_val = self.gen_exp(exp)?;
                 let AstNodeInner::LVal { ident, dimensions } = &(*lval).as_inner() else {
@@ -479,6 +484,167 @@ impl<'ctx> Codegen<'ctx> {
                     .build_store(lval_ptr, exp_val)
                     .map_err(|e| e.to_string())?;
 
+                Ok(())
+            }
+            StmtInner::Exp(opt_exp) => {
+                let Some(exp) = opt_exp else {
+                    return Ok(());
+                };
+                let val = self.gen_exp(exp)?;
+
+                Ok(())
+            }
+            StmtInner::Block(block_inner) => self.gen_block(block_inner),
+            StmtInner::Return(opt_exp) => {
+                let Some(exp) = opt_exp else {
+                    self.builder.build_return(None).map_err(|e| e.to_string())?;
+                    return Ok(());
+                };
+                let ret_val = self.gen_exp(exp)?;
+                self.builder
+                    .build_return(Some(&ret_val))
+                    .map_err(|e| e.to_string())?;
+                Ok(())
+            }
+            StmtInner::If {
+                cond,
+                then_stmt,
+                else_stmt,
+            } => {
+                let parent_fn = self
+                    .builder
+                    .get_insert_block()
+                    .and_then(|b| b.get_parent())
+                    .ok_or("Failed to get parent function".to_string())?;
+
+                let then_bb = self.ctx.append_basic_block(parent_fn, "if_true");
+                let else_bb = if else_stmt.is_some() {
+                    Some(self.ctx.append_basic_block(parent_fn, "if_false"))
+                } else {
+                    None
+                };
+                let merge_bb = self.ctx.append_basic_block(parent_fn, "next");
+
+                let cond_val = self.gen_exp(cond)?;
+                let cond_val = cond_val.into_int_value();
+
+                if let Some(else_bb) = else_bb {
+                    self.builder
+                        .build_conditional_branch(cond_val, then_bb, else_bb)
+                        .map_err(|e| e.to_string())?;
+                } else {
+                    self.builder
+                        .build_conditional_branch(cond_val, then_bb, merge_bb)
+                        .map_err(|e| e.to_string())?;
+                }
+
+                self.builder.position_at_end(then_bb);
+                let AstNodeInner::Stmt(then_inner) = then_stmt.as_inner() else {
+                    return Err("Invalid then statement".to_string());
+                };
+                self.gen_stmt(then_inner)?;
+                if self
+                    .builder
+                    .get_insert_block()
+                    .unwrap()
+                    .get_terminator()
+                    .is_none()
+                {
+                    self.builder
+                        .build_unconditional_branch(merge_bb)
+                        .map_err(|e| e.to_string())?;
+                }
+
+                if let Some(else_stmt) = else_stmt {
+                    self.builder.position_at_end(else_bb.unwrap());
+                    let AstNodeInner::Stmt(else_inner) = else_stmt.as_inner() else {
+                        return Err("Invalid else statement".to_string());
+                    };
+                    self.gen_stmt(else_inner)?;
+                    if self
+                        .builder
+                        .get_insert_block()
+                        .unwrap()
+                        .get_terminator()
+                        .is_none()
+                    {
+                        self.builder
+                            .build_unconditional_branch(merge_bb)
+                            .map_err(|e| e.to_string())?;
+                    }
+                }
+
+                self.builder.position_at_end(merge_bb);
+
+                Ok(())
+            }
+
+            StmtInner::While { cond, stmt } => {
+                let parent_fn = self
+                    .builder
+                    .get_insert_block()
+                    .and_then(|b| b.get_parent())
+                    .ok_or("Failed to get parent function".to_string())?;
+
+                let cond_bb = self.ctx.append_basic_block(parent_fn, "while_cond");
+                let body_bb = self.ctx.append_basic_block(parent_fn, "while_body");
+                let after_bb = self.ctx.append_basic_block(parent_fn, "while_after");
+
+                self.builder
+                    .build_unconditional_branch(cond_bb)
+                    .map_err(|e| e.to_string())?;
+
+                self.builder.position_at_end(cond_bb);
+                let cond_val = self.gen_exp(cond)?;
+                let cond_val = cond_val.into_int_value();
+                self.builder
+                    .build_conditional_branch(cond_val, body_bb, after_bb)
+                    .map_err(|e| e.to_string())?;
+
+                self.loop_stk.push(LoopCtx { cond_bb, after_bb });
+
+                self.builder.position_at_end(body_bb);
+                let AstNodeInner::Stmt(body_inner) = stmt.as_inner() else {
+                    return Err("Invalid while body statement".to_string());
+                };
+                self.gen_stmt(body_inner)?;
+
+                if self
+                    .builder
+                    .get_insert_block()
+                    .unwrap()
+                    .get_terminator()
+                    .is_none()
+                {
+                    self.builder
+                        .build_unconditional_branch(cond_bb)
+                        .map_err(|e| e.to_string())?;
+                }
+
+                self.loop_stk.pop();
+
+                self.builder.position_at_end(after_bb);
+
+                Ok(())
+            }
+            StmtInner::Break => {
+                let loop_ctx = self
+                    .loop_stk
+                    .last()
+                    .ok_or("Break not in a loop".to_string())?;
+                self.builder
+                    .build_unconditional_branch(loop_ctx.after_bb)
+                    .map_err(|e| e.to_string())?;
+                Ok(())
+            }
+            StmtInner::Continue => {
+                let loop_ctx = self
+                    .loop_stk
+                    .last()
+                    .ok_or("Continue not in a loop".to_string())?;
+                self.builder
+                    .build_unconditional_branch(loop_ctx.cond_bb)
+                    .map_err(|e| e.to_string())?;
                 Ok(())
             }
 
@@ -850,6 +1016,29 @@ impl<'ctx> Codegen<'ctx> {
         }
     }
 
+    fn gen_block(&mut self, node: &AstNode) -> Result<(), String> {
+        let AstNodeInner::Block(stmts) = node.as_inner() else {
+            return Err("Invalid Block node".to_string());
+        };
+
+        self.scope_stk.push();
+
+        for stmt in stmts {
+            let AstNodeInner::BlockItem(block_item) = stmt.as_inner() else {
+                return Err("Unexpected node in function body".to_string());
+            };
+            match &*block_item.as_inner() {
+                AstNodeInner::Stmt(stmt_inner) => self.gen_stmt(stmt_inner)?,
+                AstNodeInner::Decl(decl) => self.gen_decl(&block_item, false)?,
+                _ => return Err("Unexpected node in function body".to_string()),
+            }
+        }
+
+        self.scope_stk.pop();
+
+        Ok(())
+    }
+
     fn gen_lval(
         &mut self,
         ident: &String,
@@ -916,7 +1105,7 @@ fn codegen_dummy() {
 
 #[test]
 fn codegen() {
-    let src = std::fs::read_to_string("tests/codegen/test1.in").unwrap_or_default();
+    let src = std::fs::read_to_string("tests/codegen/sample6.in").unwrap_or_default();
     let ast = parse(&src, BuildConfig::default())
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));
@@ -925,6 +1114,11 @@ fn codegen() {
     codegen
         .gen_comp_unit(&ast)
         .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
-    println!("Executed with return value: {}", codegen.execute());
+
     codegen.print_to_stderr();
+
+    let ret = codegen
+        .execute()
+        .unwrap_or_else(|e| panic!("Failed to execute: {}", e));
+    println!("Program returned: {}", ret);
 }
