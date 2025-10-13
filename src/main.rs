@@ -23,7 +23,7 @@ fn main() {
         .gen_ir(&ast)
         .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
 
-    let output = args.get(2).cloned().unwrap_or("output.ll".to_string());
+    let output = args.get(2).cloned().expect("Output filename not provided");
     fs::write(&output, codegen.print_to_string())
         .unwrap_or_else(|e| panic!("Failed to write LLVM IR to file: {}", e));
 }
