@@ -1,0 +1,59 @@
+int g = 5;
+const int c = 3;
+
+int f(int a, int b) {
+    int t = a + b;
+    if (t > 10 && a < b || !(a == b)) {
+        t = t - 2;
+    } else {
+        t = t + 4;
+    }
+    return t;
+}
+
+int g2(int n) {
+    int s = 0;
+    int i = 0;
+    while (i < n) {
+        if (i == 3) {
+            i = i + 1;
+            continue;
+        }
+        if (i == 7) {
+            break;
+        }
+        s = s + i;
+        i = i + 1;
+    }
+    return s;
+}
+
+int main() {
+    int x = 1;
+    int y = 2;
+    int z = 3;
+    int r;
+
+    int g = 10;
+    r = g + c;
+
+    r = f(r, g);
+
+    int sum = 0;
+    int i = -2;
+    while (i < 5) {
+        if (i < 0 || (i > 1 && i < 4)) {
+            sum = sum + i;
+        } else if (i == 0) {
+            sum = sum + 100;
+        } else {
+            sum = sum - 1;
+        }
+        i = i + 1;
+    }
+    int s2 = g2(10);
+
+    int result = r + sum + s2 + g;
+
+    return (result) % 255;
+}
