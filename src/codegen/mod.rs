@@ -224,7 +224,7 @@ impl<'ctx> Codegen<'ctx> {
                 if value.get_type().get_bit_width() == 1 {
                     let zext_val = self
                         .builder
-                        .build_int_z_extend(value, self.ctx.i32_type(), "zext")
+                        .build_int_z_extend(value, self.ctx.i32_type(), "")
                         .map_err(|e| e.to_string())?;
                     self.builder
                         .build_store(local_ptr, zext_val)
@@ -351,7 +351,7 @@ impl<'ctx> Codegen<'ctx> {
                     if value.into_int_value().get_type().get_bit_width() == 1 {
                         let zext_val = self
                             .builder
-                            .build_int_z_extend(value.into_int_value(), self.ctx.i32_type(), "zext")
+                            .build_int_z_extend(value.into_int_value(), self.ctx.i32_type(), "")
                             .map_err(|e| e.to_string())?;
                         self.builder
                             .build_store(local_ptr, zext_val)
@@ -556,7 +556,7 @@ impl<'ctx> Codegen<'ctx> {
                 if exp_val.into_int_value().get_type().get_bit_width() == 1 {
                     let zext_val = self
                         .builder
-                        .build_int_z_extend(exp_val.into_int_value(), self.ctx.i32_type(), "zext")
+                        .build_int_z_extend(exp_val.into_int_value(), self.ctx.i32_type(), "")
                         .map_err(|e| e.to_string())?;
                     self.builder
                         .build_store(lval_ptr, zext_val)
@@ -983,13 +983,13 @@ impl<'ctx> Codegen<'ctx> {
                     if lhs_val.get_type().get_bit_width() == 1 {
                         lhs_val = self
                             .builder
-                            .build_int_z_extend(lhs_val, self.ctx.i32_type(), "zext")
+                            .build_int_z_extend(lhs_val, self.ctx.i32_type(), "")
                             .map_err(|e| e.to_string())?;
                     }
                     if rhs_val.get_type().get_bit_width() == 1 {
                         rhs_val = self
                             .builder
-                            .build_int_z_extend(rhs_val, self.ctx.i32_type(), "zext")
+                            .build_int_z_extend(rhs_val, self.ctx.i32_type(), "")
                             .map_err(|e| e.to_string())?;
                     }
 
@@ -1023,13 +1023,13 @@ impl<'ctx> Codegen<'ctx> {
                     if lhs_val.get_type().get_bit_width() == 1 {
                         lhs_val = self
                             .builder
-                            .build_int_z_extend(lhs_val, self.ctx.i32_type(), "zext")
+                            .build_int_z_extend(lhs_val, self.ctx.i32_type(), "")
                             .map_err(|e| e.to_string())?;
                     }
                     if rhs_val.get_type().get_bit_width() == 1 {
                         rhs_val = self
                             .builder
-                            .build_int_z_extend(rhs_val, self.ctx.i32_type(), "zext")
+                            .build_int_z_extend(rhs_val, self.ctx.i32_type(), "")
                             .map_err(|e| e.to_string())?;
                     }
 
@@ -1058,13 +1058,13 @@ impl<'ctx> Codegen<'ctx> {
                     if lhs_val.get_type().get_bit_width() == 1 {
                         lhs_val = self
                             .builder
-                            .build_int_z_extend(lhs_val, self.ctx.i32_type(), "zext")
+                            .build_int_z_extend(lhs_val, self.ctx.i32_type(), "")
                             .map_err(|e| e.to_string())?;
                     }
                     if rhs_val.get_type().get_bit_width() == 1 {
                         rhs_val = self
                             .builder
-                            .build_int_z_extend(rhs_val, self.ctx.i32_type(), "zext")
+                            .build_int_z_extend(rhs_val, self.ctx.i32_type(), "")
                             .map_err(|e| e.to_string())?;
                     }
 
@@ -1103,13 +1103,13 @@ impl<'ctx> Codegen<'ctx> {
                     if lhs_val.get_type().get_bit_width() == 1 {
                         lhs_val = self
                             .builder
-                            .build_int_z_extend(lhs_val, self.ctx.i32_type(), "zext")
+                            .build_int_z_extend(lhs_val, self.ctx.i32_type(), "")
                             .map_err(|e| e.to_string())?;
                     }
                     if rhs_val.get_type().get_bit_width() == 1 {
                         rhs_val = self
                             .builder
-                            .build_int_z_extend(rhs_val, self.ctx.i32_type(), "zext")
+                            .build_int_z_extend(rhs_val, self.ctx.i32_type(), "")
                             .map_err(|e| e.to_string())?;
                     }
 
@@ -1149,7 +1149,7 @@ impl<'ctx> Codegen<'ctx> {
                 if current_int.get_type().get_bit_width() == 1 {
                     current_int = self
                         .builder
-                        .build_int_z_extend(current_int, self.ctx.i32_type(), "zext")
+                        .build_int_z_extend(current_int, self.ctx.i32_type(), "")
                         .map_err(|e| e.to_string())?;
                 }
 
@@ -1182,7 +1182,7 @@ impl<'ctx> Codegen<'ctx> {
                         if rhs_int.get_type().get_bit_width() == 1 {
                             rhs_int = self
                                 .builder
-                                .build_int_z_extend(rhs_int, self.ctx.i32_type(), "zext")
+                                .build_int_z_extend(rhs_int, self.ctx.i32_type(), "")
                                 .map_err(|e| e.to_string())?;
                         }
 
@@ -1208,7 +1208,7 @@ impl<'ctx> Codegen<'ctx> {
                         if current_int.get_type().get_bit_width() == 1 {
                             current_int = self
                                 .builder
-                                .build_int_z_extend(current_int, self.ctx.i32_type(), "zext")
+                                .build_int_z_extend(current_int, self.ctx.i32_type(), "")
                                 .map_err(|e| e.to_string())?;
                         }
 
@@ -1261,7 +1261,7 @@ impl<'ctx> Codegen<'ctx> {
                 if current_int.get_type().get_bit_width() == 1 {
                     current_int = self
                         .builder
-                        .build_int_z_extend(current_int, self.ctx.i32_type(), "zext")
+                        .build_int_z_extend(current_int, self.ctx.i32_type(), "")
                         .map_err(|e| e.to_string())?;
                 }
 
@@ -1294,7 +1294,7 @@ impl<'ctx> Codegen<'ctx> {
                         if rhs_int.get_type().get_bit_width() == 1 {
                             rhs_int = self
                                 .builder
-                                .build_int_z_extend(rhs_int, self.ctx.i32_type(), "zext")
+                                .build_int_z_extend(rhs_int, self.ctx.i32_type(), "")
                                 .map_err(|e| e.to_string())?;
                         }
 
@@ -1320,7 +1320,7 @@ impl<'ctx> Codegen<'ctx> {
                         if current_int.get_type().get_bit_width() == 1 {
                             current_int = self
                                 .builder
-                                .build_int_z_extend(current_int, self.ctx.i32_type(), "zext")
+                                .build_int_z_extend(current_int, self.ctx.i32_type(), "")
                                 .map_err(|e| e.to_string())?;
                         }
 
@@ -1445,7 +1445,7 @@ fn codegen_dummy() {
 
 #[test]
 fn codegen() {
-    let src = std::fs::read_to_string("tests/codegen/test2.in").unwrap_or_default();
+    let src = std::fs::read_to_string("tests/codegen/hack9.in").unwrap_or_default();
     let ast = parse(&src, BuildConfig::default())
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));

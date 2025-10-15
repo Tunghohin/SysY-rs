@@ -1,5 +1,9 @@
 int main() {
-    int a = 2, b = 3, c = 4;
-    int d = a < b < c;
-    return d;
+    int a1 = 2, b1 = 3, c1 = 4;
+    int d1 = a1 < b1 < c1;
+
+    int a2 = 2, b2 = 2, c2 = 1;
+    int d2 = a2 == (b2 == c2);
+
+    return (d2 + d1 * 10) % 255;
 }
