@@ -221,9 +221,19 @@ impl<'ctx> Codegen<'ctx> {
                     .builder
                     .build_alloca(ty, "")
                     .map_err(|e| e.to_string())?;
-                self.builder
-                    .build_store(local_ptr, value)
-                    .map_err(|e| e.to_string())?;
+                if value.get_type().get_bit_width() == 1 {
+                    let zext_val = self
+                        .builder
+                        .build_int_z_extend(value, self.ctx.i32_type(), "zext")
+                        .map_err(|e| e.to_string())?;
+                    self.builder
+                        .build_store(local_ptr, zext_val)
+                        .map_err(|e| e.to_string())?;
+                } else {
+                    self.builder
+                        .build_store(local_ptr, value)
+                        .map_err(|e| e.to_string())?;
+                }
 
                 self.scope_stk
                     .peek_mut()
@@ -337,9 +347,20 @@ impl<'ctx> Codegen<'ctx> {
                         return Err("Only ConstExp is supported in InitVal".to_string());
                     };
                     let value = self.gen_exp(exp_inner)?;
-                    self.builder
-                        .build_store(local_ptr, value)
-                        .map_err(|e| e.to_string())?;
+
+                    if value.into_int_value().get_type().get_bit_width() == 1 {
+                        let zext_val = self
+                            .builder
+                            .build_int_z_extend(value.into_int_value(), self.ctx.i32_type(), "zext")
+                            .map_err(|e| e.to_string())?;
+                        self.builder
+                            .build_store(local_ptr, zext_val)
+                            .map_err(|e| e.to_string())?;
+                    } else {
+                        self.builder
+                            .build_store(local_ptr, value)
+                            .map_err(|e| e.to_string())?;
+                    }
                 }
 
                 self.scope_stk
@@ -531,10 +552,20 @@ impl<'ctx> Codegen<'ctx> {
                     },
                     None => return Err(format!("Undefined variable: {}", ident)),
                 };
-                self.builder
-                    .build_store(lval_ptr, exp_val)
-                    .map_err(|e| e.to_string())?;
 
+                if exp_val.into_int_value().get_type().get_bit_width() == 1 {
+                    let zext_val = self
+                        .builder
+                        .build_int_z_extend(exp_val.into_int_value(), self.ctx.i32_type(), "zext")
+                        .map_err(|e| e.to_string())?;
+                    self.builder
+                        .build_store(lval_ptr, zext_val)
+                        .map_err(|e| e.to_string())?;
+                } else {
+                    self.builder
+                        .build_store(lval_ptr, exp_val)
+                        .map_err(|e| e.to_string())?;
+                }
                 Ok(())
             }
             StmtInner::Exp(opt_exp) => {
@@ -1021,8 +1052,22 @@ impl<'ctx> Codegen<'ctx> {
                 let mut left = self.gen_exp(lhs)?;
                 for (op, rhs_node) in ops {
                     let rhs = self.gen_exp(rhs_node)?;
-                    let lhs_val = self.into_int_value_helper(left)?;
-                    let rhs_val = self.into_int_value_helper(rhs)?;
+                    let mut lhs_val = self.into_int_value_helper(left)?;
+                    let mut rhs_val = self.into_int_value_helper(rhs)?;
+
+                    if lhs_val.get_type().get_bit_width() == 1 {
+                        lhs_val = self
+                            .builder
+                            .build_int_z_extend(lhs_val, self.ctx.i32_type(), "zext")
+                            .map_err(|e| e.to_string())?;
+                    }
+                    if rhs_val.get_type().get_bit_width() == 1 {
+                        rhs_val = self
+                            .builder
+                            .build_int_z_extend(rhs_val, self.ctx.i32_type(), "zext")
+                            .map_err(|e| e.to_string())?;
+                    }
+
                     left = match op {
                         RelOpInner::Lt => self
                             .builder
@@ -1052,8 +1097,22 @@ impl<'ctx> Codegen<'ctx> {
                 let mut left = self.gen_exp(lhs)?;
                 for (op, rhs_node) in ops {
                     let rhs = self.gen_exp(rhs_node)?;
-                    let lhs_val = self.into_int_value_helper(left)?;
-                    let rhs_val = self.into_int_value_helper(rhs)?;
+                    let mut lhs_val = self.into_int_value_helper(left)?;
+                    let mut rhs_val = self.into_int_value_helper(rhs)?;
+
+                    if lhs_val.get_type().get_bit_width() == 1 {
+                        lhs_val = self
+                            .builder
+                            .build_int_z_extend(lhs_val, self.ctx.i32_type(), "zext")
+                            .map_err(|e| e.to_string())?;
+                    }
+                    if rhs_val.get_type().get_bit_width() == 1 {
+                        rhs_val = self
+                            .builder
+                            .build_int_z_extend(rhs_val, self.ctx.i32_type(), "zext")
+                            .map_err(|e| e.to_string())?;
+                    }
+
                     left = match op {
                         crate::parser::EqOpInner::Eq => self
                             .builder
@@ -1386,12 +1445,12 @@ fn codegen_dummy() {
 
 #[test]
 fn codegen() {
-    let src = std::fs::read_to_string("tests/codegen/hack9.in").unwrap_or_default();
+    let src = std::fs::read_to_string("tests/codegen/test2.in").unwrap_or_default();
     let ast = parse(&src, BuildConfig::default())
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));
 
-    // parser::display_ast(&src);
+    parser::display_ast(&src);
 
     let context = Context::create();
     let mut codegen = Codegen::new("module", &context);
