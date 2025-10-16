@@ -1,6 +1,7 @@
 #![allow(unused)]
 
-pub mod lowering;
+pub mod asm;
+pub mod regs;
 pub mod scope;
 pub mod symbol_table;
 
