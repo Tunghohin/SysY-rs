@@ -1,5 +1,6 @@
 #![allow(unused)]
 
+pub mod lowering;
 pub mod scope;
 pub mod symbol_table;
 
