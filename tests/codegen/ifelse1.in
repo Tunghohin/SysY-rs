@@ -18,5 +18,5 @@ int main() {
         ret = 3;
     }
 
-    return (ret) % 255;
+    return (ret) % 256;
 }

@@ -1446,12 +1446,12 @@ fn codegen_dummy() {
 
 #[test]
 fn codegen() {
-    let src = std::fs::read_to_string("tests/codegen/hack9.in").unwrap_or_default();
+    let src = std::fs::read_to_string("tests/codegen/longexpr.in").unwrap_or_default();
     let ast = parse(&src, BuildConfig::default())
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));
 
-    parser::display_ast(&src);
+    // parser::display_ast(&src);
 
     let context = Context::create();
     let mut codegen = Codegen::new("module", &context);

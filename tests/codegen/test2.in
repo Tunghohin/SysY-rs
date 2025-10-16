@@ -5,5 +5,5 @@ int main() {
     int a2 = 2, b2 = 2, c2 = 1;
     int d2 = a2 == (b2 == c2);
 
-    return (d2 + d1 * 10) % 255;
+    return (d2 + d1 * 10) % 256;
 }

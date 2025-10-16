@@ -10,5 +10,5 @@ int main() {
         s = s + i;
         i = i + 1;
     }
-    return (s) % 255;
+    return (s) % 256;
 }

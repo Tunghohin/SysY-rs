@@ -55,5 +55,5 @@ int main() {
 
     int result = r + sum + s2 + g;
 
-    return (result) % 255;
+    return (result) % 256;
 }
