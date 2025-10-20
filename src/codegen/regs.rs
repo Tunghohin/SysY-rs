@@ -36,6 +36,40 @@ pub enum RV32IReg {
 
 impl std::fmt::Display for RV32IReg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        let literal = match self {
+            RV32IReg::Zero => "zero",
+            RV32IReg::Ra => "ra",
+            RV32IReg::Sp => "sp",
+            RV32IReg::Gp => "gp",
+            RV32IReg::Tp => "tp",
+            RV32IReg::T0 => "t0",
+            RV32IReg::T1 => "t1",
+            RV32IReg::T2 => "t2",
+            RV32IReg::S0 => "s0",
+            RV32IReg::S1 => "s1",
+            RV32IReg::A0 => "a0",
+            RV32IReg::A1 => "a1",
+            RV32IReg::A2 => "a2",
+            RV32IReg::A3 => "a3",
+            RV32IReg::A4 => "a4",
+            RV32IReg::A5 => "a5",
+            RV32IReg::A6 => "a6",
+            RV32IReg::A7 => "a7",
+            RV32IReg::S2 => "s2",
+            RV32IReg::S3 => "s3",
+            RV32IReg::S4 => "s4",
+            RV32IReg::S5 => "s5",
+            RV32IReg::S6 => "s6",
+            RV32IReg::S7 => "s7",
+            RV32IReg::S8 => "s8",
+            RV32IReg::S9 => "s9",
+            RV32IReg::S10 => "s10",
+            RV32IReg::S11 => "s11",
+            RV32IReg::T3 => "t3",
+            RV32IReg::T4 => "t4",
+            RV32IReg::T5 => "t5",
+            RV32IReg::T6 => "t6",
+        };
+        write!(f, "{}", literal)
     }
 }
