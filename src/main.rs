@@ -37,5 +37,5 @@ fn main() {
     asm_gen
         .gen_asm()
         .unwrap_or_else(|e| panic!("Failed to generate assembly: {}", e));
-    println!("{}", asm_gen.emit());
+    eprintln!("{}", asm_gen.emit());
 }
