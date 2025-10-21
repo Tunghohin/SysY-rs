@@ -308,7 +308,7 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             allocator: T::new(),
             entry,
         };
-        ret.ir_module.optimize();
+        // ret.ir_module.optimize();
         ret
     }
 
@@ -373,6 +373,7 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                     InstructionOpcode::SRem => self.gen_binary(&instr, Operator::SRem)?,
                     InstructionOpcode::ICmp => self.gen_icmp(&instr)?,
                     InstructionOpcode::Br => self.gen_br(&instr)?,
+                    InstructionOpcode::Phi => self.gen_phi(&instr)?,
                     _ => {}
                 }
             }
@@ -380,11 +381,67 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
         Ok(())
     }
 
+    fn gen_phi(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
+        Ok(())
+    }
+
     fn gen_br(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
         let num_operands = instr.get_num_operands();
         match num_operands {
             1 => {}
-            3 => {}
+            3 => {
+                let cond = instr
+                    .get_operand(0)
+                    .ok_or("Branch instruction missing condition operand")?
+                    .left()
+                    .ok_or("Invalid condition operand")?
+                    .as_value_ref();
+
+                let cond_loc = self
+                    .allocator
+                    .get(&cond)
+                    .ok_or("Condition location not found")?;
+
+                let true_bb_val = instr
+                    .get_operand(1)
+                    .ok_or("Branch instruction missing true target operand")?
+                    .right()
+                    .ok_or("Invalid true target operand")?;
+
+                let true_bb = true_bb_val.get_name().to_str().map_err(|e| e.to_string())?;
+
+                let false_bb_val = instr
+                    .get_operand(2)
+                    .ok_or("Branch instruction missing false target operand")?
+                    .right()
+                    .ok_or("Invalid false target operand")?;
+
+                let false_bb = false_bb_val
+                    .get_name()
+                    .to_str()
+                    .map_err(|e| e.to_string())?;
+
+                match cond_loc {
+                    Location::Reg(reg) => {
+                        self.builder.beq(reg, RV32IReg::Zero, false_bb);
+                        self.builder.tail(true_bb);
+                    }
+                    Location::Stack(offset) => {
+                        self.builder.lw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
+                        self.builder.beq(RV32IReg::T0, RV32IReg::Zero, false_bb);
+                        self.builder.tail(true_bb);
+                    }
+                    Location::Global(name) => {
+                        self.builder.la(RV32IReg::T0, &name);
+                        self.builder.lw(RV32IReg::T0, 0, RV32IReg::T0);
+                        self.builder.beq(RV32IReg::T0, RV32IReg::Zero, false_bb);
+                        self.builder.tail(true_bb);
+                    }
+                    _ => {
+                        return Err("Unsupported condition location for branch".to_string());
+                    }
+                }
+            }
             _ => {
                 return Err("Unsupported number of operands for branch instruction".to_string());
             }
@@ -421,6 +478,9 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             }
             Location::Stack(offset) => {
                 self.builder.lw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
+            }
+            Location::Reg(reg) => {
+                self.builder.lw(RV32IReg::T0, 0, reg);
             }
             _ => {
                 return Err("Unsupported source location for load".to_string());
