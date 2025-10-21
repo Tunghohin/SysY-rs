@@ -624,9 +624,6 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                 );
             }
         }
-        self.builder
-            .li(RV32IReg::T0, 256)
-            .rem(RV32IReg::A0, RV32IReg::A0, RV32IReg::T0);
 
         if is_entry {
             self.builder.li(RV32IReg::A7, 93).ecall();
