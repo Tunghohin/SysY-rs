@@ -98,23 +98,162 @@ pub trait RegisterAllocator {
     fn get(&self, val_ref: &LLVMValueRef) -> Option<Location>;
 }
 
-pub struct LinearScanRegisterAllocator {}
+#[derive(Debug, Clone)]
+struct LiveInterval {
+    val_ref: LLVMValueRef,
+    start: usize,
+    end: usize,
+}
 
-impl<'ctx> RegisterAllocator for LinearScanRegisterAllocator {
+pub struct LinearScanRegisterAllocator {
+    global: HashMap<LLVMValueRef, Location>,
+    vreg_map: HashMap<LLVMValueRef, Location>,
+    available_regs: Vec<RV32IReg>,
+}
+
+impl LinearScanRegisterAllocator {
+    fn get_allocatable_regs() -> Vec<RV32IReg> {
+        vec![
+            RV32IReg::T3,
+            RV32IReg::T4,
+            RV32IReg::T5,
+            RV32IReg::T6,
+            // Saved registers (callee-saved)
+            RV32IReg::S0,
+            RV32IReg::S1,
+            RV32IReg::S2,
+            RV32IReg::S3,
+            RV32IReg::S4,
+            RV32IReg::S5,
+            RV32IReg::S6,
+            RV32IReg::S7,
+            RV32IReg::S8,
+            RV32IReg::S9,
+            RV32IReg::S10,
+            RV32IReg::S11,
+            // Argument registers (can be reused after function prologue)
+            RV32IReg::A0,
+            RV32IReg::A1,
+            RV32IReg::A2,
+            RV32IReg::A3,
+            RV32IReg::A4,
+            RV32IReg::A5,
+            RV32IReg::A6,
+            RV32IReg::A7,
+        ]
+    }
+
+    fn build_live_intervals(&self, func: &FunctionValue) -> Vec<LiveInterval> {
+        let mut intervals = Vec::new();
+        let mut position = 0usize;
+        let mut inst_positions: HashMap<LLVMValueRef, usize> = HashMap::new();
+
+        for bb in func.get_basic_blocks() {
+            for inst in bb.get_instructions() {
+                inst_positions.insert(inst.as_value_ref(), position);
+                position += 1;
+            }
+        }
+
+        for bb in func.get_basic_blocks() {
+            for inst in bb.get_instructions() {
+                let inst_type = inst.get_type();
+                if inst_type.is_void_type() {
+                    continue;
+                }
+
+                let val_ref = inst.as_value_ref();
+                let start = *inst_positions.get(&val_ref).unwrap();
+                let mut end = start;
+
+                unsafe {
+                    use inkwell::llvm_sys::core::*;
+
+                    let mut use_iter = LLVMGetFirstUse(val_ref);
+                    while !use_iter.is_null() {
+                        let user = LLVMGetUser(use_iter);
+
+                        // Check if the user is an instruction and get its position
+                        if let Some(&use_pos) = inst_positions.get(&user) {
+                            end = end.max(use_pos);
+                        }
+
+                        use_iter = LLVMGetNextUse(use_iter);
+                    }
+                }
+
+                intervals.push(LiveInterval {
+                    val_ref,
+                    start,
+                    end,
+                });
+            }
+        }
+
+        intervals.sort_by_key(|i| i.start);
+        intervals
+    }
+
+    fn linear_scan(&mut self, intervals: Vec<LiveInterval>) -> Result<(), String> {
+        let mut active: Vec<(LiveInterval, RV32IReg)> = Vec::new();
+        let mut free_regs = self.available_regs.clone();
+        let mut stack_offset = 0usize;
+
+        for interval in intervals {
+            active.retain(|(active_interval, reg)| {
+                if active_interval.end < interval.start {
+                    // This interval is no longer active, free its register
+                    free_regs.push(*reg);
+                    false
+                } else {
+                    true
+                }
+            });
+
+            if let Some(reg) = free_regs.pop() {
+                self.vreg_map.insert(interval.val_ref, Location::Reg(reg));
+                active.push((interval.clone(), reg));
+            } else {
+                self.vreg_map
+                    .insert(interval.val_ref, Location::Stack(stack_offset));
+                stack_offset += 4;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl RegisterAllocator for LinearScanRegisterAllocator {
     fn new() -> Self {
-        unimplemented!()
+        Self {
+            global: HashMap::new(),
+            vreg_map: HashMap::new(),
+            available_regs: Self::get_allocatable_regs(),
+        }
     }
 
-    fn alloc_global(&mut self, name: &GlobalValue) -> Result<(), String> {
-        unimplemented!()
+    fn alloc_global(&mut self, global_val: &GlobalValue) -> Result<(), String> {
+        self.global.insert(
+            global_val.as_value_ref(),
+            Location::Global(global_val.get_name().to_str().unwrap().to_string()),
+        );
+        Ok(())
     }
 
-    fn alloc_in_function(&mut self, global_val: &FunctionValue) -> Result<(), String> {
-        unimplemented!()
+    fn alloc_in_function(&mut self, func: &FunctionValue) -> Result<(), String> {
+        let intervals = self.build_live_intervals(func);
+
+        self.linear_scan(intervals)?;
+
+        Ok(())
     }
 
     fn get(&self, val_ref: &LLVMValueRef) -> Option<Location> {
-        unimplemented!()
+        self.vreg_map
+            .get(val_ref)
+            .or_else(|| self.global.get(val_ref))
+            .cloned()
     }
 }
 
