@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use inkwell::{
+    basic_block::BasicBlock,
     llvm_sys::prelude::LLVMValueRef,
     values::{
         AnyValue, AsValueRef, FunctionValue, GenericValue, GlobalValue, InstructionOpcode,
@@ -94,7 +95,7 @@ pub enum Location {
 pub trait RegisterAllocator {
     fn new() -> Self;
     fn alloc_global(&mut self, global_val: &GlobalValue) -> Result<(), String>;
-    fn alloc_in_function(&mut self, name: &FunctionValue) -> Result<(), String>;
+    fn alloc_in_function(&mut self, name: &BasicBlock) -> Result<(), String>;
     fn get(&self, val_ref: &LLVMValueRef) -> Option<Location>;
 }
 
@@ -108,6 +109,7 @@ struct LiveInterval {
 pub struct LinearScanRegisterAllocator {
     global: HashMap<LLVMValueRef, Location>,
     vreg_map: HashMap<LLVMValueRef, Location>,
+    stack_offset: usize,
     available_regs: Vec<RV32IReg>,
 }
 
@@ -143,51 +145,47 @@ impl LinearScanRegisterAllocator {
         ]
     }
 
-    fn build_live_intervals(&self, func: &FunctionValue) -> Vec<LiveInterval> {
+    fn build_live_intervals(&self, bb: &BasicBlock) -> Vec<LiveInterval> {
         let mut intervals = Vec::new();
         let mut position = 0usize;
         let mut inst_positions: HashMap<LLVMValueRef, usize> = HashMap::new();
 
-        for bb in func.get_basic_blocks() {
-            for inst in bb.get_instructions() {
-                inst_positions.insert(inst.as_value_ref(), position);
-                position += 1;
-            }
+        for inst in bb.get_instructions() {
+            inst_positions.insert(inst.as_value_ref(), position);
+            position += 1;
         }
 
-        for bb in func.get_basic_blocks() {
-            for inst in bb.get_instructions() {
-                let inst_type = inst.get_type();
-                if inst_type.is_void_type() {
-                    continue;
-                }
-
-                let val_ref = inst.as_value_ref();
-                let start = *inst_positions.get(&val_ref).unwrap();
-                let mut end = start;
-
-                unsafe {
-                    use inkwell::llvm_sys::core::*;
-
-                    let mut use_iter = LLVMGetFirstUse(val_ref);
-                    while !use_iter.is_null() {
-                        let user = LLVMGetUser(use_iter);
-
-                        // Check if the user is an instruction and get its position
-                        if let Some(&use_pos) = inst_positions.get(&user) {
-                            end = end.max(use_pos);
-                        }
-
-                        use_iter = LLVMGetNextUse(use_iter);
-                    }
-                }
-
-                intervals.push(LiveInterval {
-                    val_ref,
-                    start,
-                    end,
-                });
+        for inst in bb.get_instructions() {
+            let inst_type = inst.get_type();
+            if inst_type.is_void_type() {
+                continue;
             }
+
+            let val_ref = inst.as_value_ref();
+            let start = *inst_positions.get(&val_ref).unwrap();
+            let mut end = start;
+
+            unsafe {
+                use inkwell::llvm_sys::core::*;
+
+                let mut use_iter = LLVMGetFirstUse(val_ref);
+                while !use_iter.is_null() {
+                    let user = LLVMGetUser(use_iter);
+
+                    // Check if the user is an instruction and get its position
+                    if let Some(&use_pos) = inst_positions.get(&user) {
+                        end = end.max(use_pos);
+                    }
+
+                    use_iter = LLVMGetNextUse(use_iter);
+                }
+            }
+
+            intervals.push(LiveInterval {
+                val_ref,
+                start,
+                end,
+            });
         }
 
         intervals.sort_by_key(|i| i.start);
@@ -197,7 +195,6 @@ impl LinearScanRegisterAllocator {
     fn linear_scan(&mut self, intervals: Vec<LiveInterval>) -> Result<(), String> {
         let mut active: Vec<(LiveInterval, RV32IReg)> = Vec::new();
         let mut free_regs = self.available_regs.clone();
-        let mut stack_offset = 0usize;
 
         for interval in intervals {
             active.retain(|(active_interval, reg)| {
@@ -215,8 +212,8 @@ impl LinearScanRegisterAllocator {
                 active.push((interval.clone(), reg));
             } else {
                 self.vreg_map
-                    .insert(interval.val_ref, Location::Stack(stack_offset));
-                stack_offset += 4;
+                    .insert(interval.val_ref, Location::Stack(self.stack_offset));
+                self.stack_offset += 4;
             }
         }
 
@@ -230,6 +227,7 @@ impl RegisterAllocator for LinearScanRegisterAllocator {
             global: HashMap::new(),
             vreg_map: HashMap::new(),
             available_regs: Self::get_allocatable_regs(),
+            stack_offset: 0,
         }
     }
 
@@ -241,8 +239,8 @@ impl RegisterAllocator for LinearScanRegisterAllocator {
         Ok(())
     }
 
-    fn alloc_in_function(&mut self, func: &FunctionValue) -> Result<(), String> {
-        let intervals = self.build_live_intervals(func);
+    fn alloc_in_function(&mut self, bb: &BasicBlock) -> Result<(), String> {
+        let intervals = self.build_live_intervals(bb);
 
         self.linear_scan(intervals)?;
 
@@ -260,15 +258,15 @@ impl RegisterAllocator for LinearScanRegisterAllocator {
 pub struct NoneRegisterAllocator {
     global: HashMap<LLVMValueRef, Location>,
     vreg_map: HashMap<LLVMValueRef, Location>,
+    stack_offset: usize,
 }
-
-impl<'ctx> NoneRegisterAllocator {}
 
 impl<'ctx> RegisterAllocator for NoneRegisterAllocator {
     fn new() -> Self {
         Self {
             global: HashMap::new(),
             vreg_map: HashMap::new(),
+            stack_offset: 0,
         }
     }
 
@@ -280,15 +278,12 @@ impl<'ctx> RegisterAllocator for NoneRegisterAllocator {
         Ok(())
     }
 
-    fn alloc_in_function(&mut self, name: &FunctionValue) -> Result<(), String> {
-        let mut offset = 0usize;
-        for bb in name.get_basic_blocks() {
-            for inst in bb.get_instructions() {
-                if !inst.get_type().is_void_type() {
-                    self.vreg_map
-                        .insert(inst.as_value_ref(), Location::Stack(offset));
-                    offset += 4;
-                }
+    fn alloc_in_function(&mut self, name: &BasicBlock) -> Result<(), String> {
+        for inst in name.get_instructions() {
+            if !inst.get_type().is_void_type() {
+                self.vreg_map
+                    .insert(inst.as_value_ref(), Location::Stack(self.stack_offset));
+                self.stack_offset += 4;
             }
         }
         Ok(())

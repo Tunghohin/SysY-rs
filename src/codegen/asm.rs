@@ -1,3 +1,5 @@
+use std::num;
+
 use crate::codegen::ir::LLVMIRGenerator;
 use crate::codegen::regs::{
     LinearScanRegisterAllocator, Location, NoneRegisterAllocator, RV32IReg, RegisterAllocator,
@@ -10,32 +12,17 @@ use inkwell::values::{AsValueRef, BasicValue, FunctionValue, InstructionOpcode, 
 #[derive(Clone, Copy, Debug)]
 pub struct VarId(pub u32);
 
-struct RV32IBuilder {
+pub struct RV32IBuilder {
     buf: String,
 }
 
 impl RV32IBuilder {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self { buf: String::new() }
     }
 
     pub fn addi(&mut self, dest: RV32IReg, src: RV32IReg, imm: i32) -> &mut Self {
-        self.buf += &format!("    addi {}, {}, 0x{:x}\n", dest, src, imm);
-        self
-    }
-
-    pub fn lui(&mut self, dest: &str, imm: i32) -> &mut Self {
-        self.buf += &format!("    lui {}, 0x{:x}\n", dest, imm);
-        self
-    }
-
-    pub fn jal(&mut self, dest: &str, offset: i32) -> &mut Self {
-        self.buf += &format!("    jal {}, 0x{:x}\n", dest, offset);
-        self
-    }
-
-    pub fn beq(&mut self, src1: &str, src2: &str, offset: i32) -> &mut Self {
-        self.buf += &format!("    beq {}, {}, 0x{:x}\n", src1, src2, offset);
+        self.buf += &format!("    addi {}, {}, {}\n", dest, src, imm);
         self
     }
 
@@ -46,6 +33,66 @@ impl RV32IBuilder {
 
     pub fn sub(&mut self, dest: RV32IReg, src1: RV32IReg, src2: RV32IReg) -> &mut Self {
         self.buf += &format!("    sub {}, {}, {}\n", dest, src1, src2);
+        self
+    }
+
+    pub fn xor(&mut self, dest: RV32IReg, src1: RV32IReg, src2: RV32IReg) -> &mut Self {
+        self.buf += &format!("    xor {}, {}, {}\n", dest, src1, src2);
+        self
+    }
+
+    pub fn and(&mut self, dest: RV32IReg, src1: RV32IReg, src2: RV32IReg) -> &mut Self {
+        self.buf += &format!("    and {}, {}, {}\n", dest, src1, src2);
+        self
+    }
+
+    pub fn or(&mut self, dest: RV32IReg, src1: RV32IReg, src2: RV32IReg) -> &mut Self {
+        self.buf += &format!("    or {}, {}, {}\n", dest, src1, src2);
+        self
+    }
+
+    pub fn sll(&mut self, dest: RV32IReg, src1: RV32IReg, src2: RV32IReg) -> &mut Self {
+        self.buf += &format!("    sll {}, {}, {}\n", dest, src1, src2);
+        self
+    }
+
+    pub fn srl(&mut self, dest: RV32IReg, src1: RV32IReg, src2: RV32IReg) -> &mut Self {
+        self.buf += &format!("    srl {}, {}, {}\n", dest, src1, src2);
+        self
+    }
+
+    pub fn sra(&mut self, dest: RV32IReg, src1: RV32IReg, src2: RV32IReg) -> &mut Self {
+        self.buf += &format!("    sra {}, {}, {}\n", dest, src1, src2);
+        self
+    }
+
+    pub fn slt(&mut self, dest: RV32IReg, src1: RV32IReg, src2: RV32IReg) -> &mut Self {
+        self.buf += &format!("    slt {}, {}, {}\n", dest, src1, src2);
+        self
+    }
+
+    pub fn sltu(&mut self, dest: RV32IReg, src1: RV32IReg, src2: RV32IReg) -> &mut Self {
+        self.buf += &format!("    sltu {}, {}, {}\n", dest, src1, src2);
+        self
+    }
+
+    pub fn slti(&mut self, dest: RV32IReg, src: RV32IReg, imm: i32) -> &mut Self {
+        self.buf += &format!("    slti {}, {}, {}\n", dest, src, imm);
+        self
+    }
+
+    pub fn sltiu(&mut self, dest: RV32IReg, src: RV32IReg, imm: i32) -> &mut Self {
+        self.buf += &format!("    sltiu {}, {}, {}\n", dest, src, imm);
+        self
+    }
+
+    pub fn lui(&mut self, dest: RV32IReg, imm: i32) -> &mut Self {
+        self.buf += &format!("    lui {}, {}\n", dest, imm);
+        self
+    }
+
+    pub fn auipc(&mut self, dest: RV32IReg, imm: i32) -> &mut Self {
+        self.buf += &format!("    auipc {}, {}\n", dest, imm);
         self
     }
 
@@ -89,53 +136,53 @@ impl RV32IBuilder {
         self
     }
 
-    pub fn and(&mut self, dest: &str, src1: &str, src2: &str) -> &mut Self {
-        self.buf += &format!("    and {}, {}, {}\n", dest, src1, src2);
+    pub fn seqz(&mut self, dest: RV32IReg, src: RV32IReg) -> &mut Self {
+        self.buf += &format!("    seqz {}, {}\n", dest, src);
         self
     }
 
-    pub fn or(&mut self, dest: &str, src1: &str, src2: &str) -> &mut Self {
-        self.buf += &format!("    or {}, {}, {}\n", dest, src1, src2);
+    pub fn snez(&mut self, dest: RV32IReg, src: RV32IReg) -> &mut Self {
+        self.buf += &format!("    snez {}, {}\n", dest, src);
         self
     }
 
-    pub fn xor(&mut self, dest: &str, src1: &str, src2: &str) -> &mut Self {
-        self.buf += &format!("    xor {}, {}, {}\n", dest, src1, src2);
+    pub fn sltz(&mut self, dest: RV32IReg, src: RV32IReg) -> &mut Self {
+        self.buf += &format!("    sltz {}, {}\n", dest, src);
         self
     }
 
-    pub fn sll(&mut self, dest: &str, src1: &str, src2: &str) -> &mut Self {
-        self.buf += &format!("    sll {}, {}, {}\n", dest, src1, src2);
+    pub fn sgtz(&mut self, dest: RV32IReg, src: RV32IReg) -> &mut Self {
+        self.buf += &format!("    sgtz {}, {}\n", dest, src);
         self
     }
 
-    pub fn srl(&mut self, dest: &str, src1: &str, src2: &str) -> &mut Self {
-        self.buf += &format!("    srl {}, {}, {}\n", dest, src1, src2);
+    pub fn beq(&mut self, src1: RV32IReg, src2: RV32IReg, label: &str) -> &mut Self {
+        self.buf += &format!("    beq {}, {}, {}\n", src1, src2, label);
         self
     }
 
-    pub fn sra(&mut self, dest: &str, src1: &str, src2: &str) -> &mut Self {
-        self.buf += &format!("    sra {}, {}, {}\n", dest, src1, src2);
+    pub fn bne(&mut self, src1: RV32IReg, src2: RV32IReg, label: &str) -> &mut Self {
+        self.buf += &format!("    bne {}, {}, {}\n", src1, src2, label);
         self
     }
 
-    pub fn slt(&mut self, dest: &str, src1: &str, src2: &str) -> &mut Self {
-        self.buf += &format!("    slt {}, {}, {}\n", dest, src1, src2);
+    pub fn blt(&mut self, src1: RV32IReg, src2: RV32IReg, label: &str) -> &mut Self {
+        self.buf += &format!("    blt {}, {}, {}\n", src1, src2, label);
         self
     }
 
-    pub fn sltu(&mut self, dest: &str, src1: &str, src2: &str) -> &mut Self {
-        self.buf += &format!("    sltu {}, {}, {}\n", dest, src1, src2);
+    pub fn bge(&mut self, src1: RV32IReg, src2: RV32IReg, label: &str) -> &mut Self {
+        self.buf += &format!("    bge {}, {}, {}\n", src1, src2, label);
         self
     }
 
-    pub fn lb(&mut self, dest: &str, offset: i32, base: &str) -> &mut Self {
-        self.buf += &format!("    lb {}, {}({})\n", dest, offset, base);
+    pub fn bltu(&mut self, src1: RV32IReg, src2: RV32IReg, label: &str) -> &mut Self {
+        self.buf += &format!("    bltu {}, {}, {}\n", src1, src2, label);
         self
     }
 
-    pub fn lh(&mut self, dest: &str, offset: i32, base: &str) -> &mut Self {
-        self.buf += &format!("    lh {}, {}({})\n", dest, offset, base);
+    pub fn bgeu(&mut self, src1: RV32IReg, src2: RV32IReg, label: &str) -> &mut Self {
+        self.buf += &format!("    bgeu {}, {}, {}\n", src1, src2, label);
         self
     }
 
@@ -144,23 +191,23 @@ impl RV32IBuilder {
         self
     }
 
-    pub fn sb(&mut self, src: &str, offset: i32, base: &str) -> &mut Self {
-        self.buf += &format!("    sb {}, {}({})\n", src, offset, base);
-        self
-    }
-
-    pub fn sh(&mut self, src: &str, offset: i32, base: &str) -> &mut Self {
-        self.buf += &format!("    sh {}, {}({})\n", src, offset, base);
-        self
-    }
-
     pub fn sw(&mut self, src: RV32IReg, offset: i32, base: RV32IReg) -> &mut Self {
         self.buf += &format!("    sw {}, {}({})\n", src, offset, base);
         self
     }
 
+    pub fn lb(&mut self, dest: RV32IReg, offset: i32, base: RV32IReg) -> &mut Self {
+        self.buf += &format!("    lb {}, {}({})\n", dest, offset, base);
+        self
+    }
+
+    pub fn sb(&mut self, src: RV32IReg, offset: i32, base: RV32IReg) -> &mut Self {
+        self.buf += &format!("    sb {}, {}({})\n", src, offset, base);
+        self
+    }
+
     pub fn li(&mut self, dest: RV32IReg, imm: i32) -> &mut Self {
-        self.buf += &format!("    li {}, 0x{:x}\n", dest, imm);
+        self.buf += &format!("    li {}, {}\n", dest, imm);
         self
     }
 
@@ -222,13 +269,13 @@ impl RV32IBuilder {
         self
     }
 
-    pub fn emit(&self) -> &str {
-        &self.buf
-    }
-
     pub fn newline(&mut self) -> &mut Self {
         self.buf += "\n";
         self
+    }
+
+    pub fn emit(&self) -> &str {
+        &self.buf
     }
 }
 
@@ -245,14 +292,12 @@ enum Operator {
     Mul,
     Div,
     SRem,
-    And,
-    Or,
-    Xor,
-    Shl,
-    Shr,
-    Sar,
-    Slt,
-    Sltu,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    Eq,
+    Ne,
 }
 
 impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
@@ -311,9 +356,9 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
         self.builder.text_section().globl(name).tag(name);
 
         self.gen_prologue(&func)?;
-        self.allocator.alloc_in_function(&func)?;
 
         for bb in func.get_basic_blocks() {
+            self.allocator.alloc_in_function(&bb)?;
             self.builder
                 .tag(bb.get_name().to_str().map_err(|e| e.to_string())?);
             for instr in bb.get_instructions() {
@@ -326,9 +371,22 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                     InstructionOpcode::Mul => self.gen_binary(&instr, Operator::Mul)?,
                     InstructionOpcode::SDiv => self.gen_binary(&instr, Operator::Div)?,
                     InstructionOpcode::SRem => self.gen_binary(&instr, Operator::SRem)?,
-                    // Add more binary operators here as needed
+                    InstructionOpcode::ICmp => self.gen_icmp(&instr)?,
+                    InstructionOpcode::Br => self.gen_br(&instr)?,
                     _ => {}
                 }
+            }
+        }
+        Ok(())
+    }
+
+    fn gen_br(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
+        let num_operands = instr.get_num_operands();
+        match num_operands {
+            1 => {}
+            3 => {}
+            _ => {
+                return Err("Unsupported number of operands for branch instruction".to_string());
             }
         }
         Ok(())
@@ -465,6 +523,25 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
         Ok(())
     }
 
+    fn gen_icmp(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
+        if instr.get_num_operands() != 2 {
+            return Err("ICmp instruction must have 3 operands".to_string());
+        }
+
+        let predicate = instr.get_icmp_predicate().ok_or("Missing ICmp predicate")?;
+        let predicate = match predicate {
+            inkwell::IntPredicate::EQ => Operator::Eq,
+            inkwell::IntPredicate::NE => Operator::Ne,
+            inkwell::IntPredicate::SLT => Operator::Lt,
+            inkwell::IntPredicate::SGT => Operator::Gt,
+            inkwell::IntPredicate::SLE => Operator::Le,
+            inkwell::IntPredicate::SGE => Operator::Ge,
+            _ => return Err("Unsupported ICmp predicate".to_string()),
+        };
+
+        self.gen_binary(instr, predicate)
+    }
+
     fn gen_binary(&mut self, instr: &InstructionValue<'_>, op: Operator) -> Result<(), String> {
         if instr.get_num_operands() != 2 {
             return Err("Binary instruction must have 2 operands".to_string());
@@ -561,6 +638,26 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             }
             Operator::SRem => {
                 self.builder.rem(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+            }
+            Operator::Lt => {
+                self.builder.slt(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+            }
+            Operator::Gt => {
+                self.builder.slt(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+            }
+            Operator::Le => {
+                self.builder.slt(RV32IReg::T0, RV32IReg::T1, RV32IReg::T0);
+            }
+            Operator::Ge => {
+                self.builder.slt(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+            }
+            Operator::Eq => {
+                self.builder.xor(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+                self.builder.seqz(RV32IReg::T0, RV32IReg::T0);
+            }
+            Operator::Ne => {
+                self.builder.xor(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+                self.builder.snez(RV32IReg::T0, RV32IReg::T0);
             }
             _ => {
                 return Err("Unsupported binary operator".to_string());
