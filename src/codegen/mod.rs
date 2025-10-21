@@ -17,6 +17,7 @@ use crate::parser::parse;
 
 use crate::codegen::asm::RV32IASMGenerator;
 use crate::codegen::ir::LLVMIRGenerator;
+use crate::codegen::regs::NoneRegisterAllocator;
 use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
 use inkwell::builder::Builder;
@@ -64,7 +65,7 @@ fn codegen_dummy() {
 
 #[test]
 fn codegen() {
-    let src = std::fs::read_to_string("tests/codegen/longexpr.in").unwrap_or_default();
+    let src = std::fs::read_to_string("tests/codegen/asm2.in").unwrap_or_default();
     let ast = parse(&src, BuildConfig::default())
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));
@@ -85,9 +86,24 @@ fn codegen() {
         .unwrap_or_else(|e| panic!("Failed to execute: {}", e));
     println!("Program return: {}\n\n\n", ret);
 
-    let mut asm_gen = RV32IASMGenerator::new(llvm_ir_gen, "main");
+    let mut asm_gen: RV32IASMGenerator<NoneRegisterAllocator> =
+        RV32IASMGenerator::new(llvm_ir_gen, "main");
     asm_gen
         .gen_asm()
         .unwrap_or_else(|e| panic!("Failed to generate assembly: {}", e));
-    asm_gen.print_to_stderr();
+    std::fs::write("./solution.txt", asm_gen.emit()).expect("Unable to write file");
+
+    let output = std::process::Command::new("java")
+        .args([
+            "-jar",
+            "/home/sgimage/Labs/rars.jar",
+            "/home/sgimage/Labs/compiler/solution.txt",
+            "ic",
+            "a0",
+        ])
+        .output()
+        .expect("failed to run RARS");
+
+    println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+    // run rars
 }

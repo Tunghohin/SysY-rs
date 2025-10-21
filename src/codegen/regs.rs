@@ -1,3 +1,13 @@
+use std::collections::HashMap;
+
+use inkwell::{
+    llvm_sys::prelude::LLVMValueRef,
+    values::{
+        AnyValue, AsValueRef, FunctionValue, GenericValue, GlobalValue, InstructionOpcode,
+        InstructionValue,
+    },
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RV32IReg {
     Zero,
@@ -71,5 +81,84 @@ impl std::fmt::Display for RV32IReg {
             RV32IReg::T6 => "t6",
         };
         write!(f, "{}", literal)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Location {
+    Stack(usize),
+    Reg(RV32IReg),
+    Global(String),
+}
+
+pub trait RegisterAllocator {
+    fn new() -> Self;
+    fn alloc_global(&mut self, global_val: &GlobalValue) -> Result<(), String>;
+    fn alloc_in_function(&mut self, name: &FunctionValue) -> Result<(), String>;
+    fn get(&self, val_ref: &LLVMValueRef) -> Option<Location>;
+}
+
+pub struct LinearScanRegisterAllocator {}
+
+impl<'ctx> RegisterAllocator for LinearScanRegisterAllocator {
+    fn new() -> Self {
+        unimplemented!()
+    }
+
+    fn alloc_global(&mut self, name: &GlobalValue) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn alloc_in_function(&mut self, global_val: &FunctionValue) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn get(&self, val_ref: &LLVMValueRef) -> Option<Location> {
+        unimplemented!()
+    }
+}
+
+pub struct NoneRegisterAllocator {
+    global: HashMap<LLVMValueRef, Location>,
+    vreg_map: HashMap<LLVMValueRef, Location>,
+}
+
+impl<'ctx> NoneRegisterAllocator {}
+
+impl<'ctx> RegisterAllocator for NoneRegisterAllocator {
+    fn new() -> Self {
+        Self {
+            global: HashMap::new(),
+            vreg_map: HashMap::new(),
+        }
+    }
+
+    fn alloc_global(&mut self, global_val: &GlobalValue) -> Result<(), String> {
+        self.global.insert(
+            global_val.as_value_ref(),
+            Location::Global(global_val.get_name().to_str().unwrap().to_string()),
+        );
+        Ok(())
+    }
+
+    fn alloc_in_function(&mut self, name: &FunctionValue) -> Result<(), String> {
+        let mut offset = 0usize;
+        for bb in name.get_basic_blocks() {
+            for inst in bb.get_instructions() {
+                if !inst.get_type().is_void_type() {
+                    self.vreg_map
+                        .insert(inst.as_value_ref(), Location::Stack(offset));
+                    offset += 4;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn get(&self, val_ref: &LLVMValueRef) -> Option<Location> {
+        self.vreg_map
+            .get(val_ref)
+            .or_else(|| self.global.get(val_ref))
+            .cloned()
     }
 }
