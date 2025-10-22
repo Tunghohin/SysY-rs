@@ -308,7 +308,7 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             allocator: T::new(),
             entry,
         };
-        // ret.ir_module.optimize();
+        ret.ir_module.optimize();
         ret
     }
 
