@@ -53,6 +53,7 @@ impl<'ctx> LLVMIRGenerator<'ctx> {
 
     pub fn optimize(&mut self) {
         let pass_manager: PassManager<Module<'ctx>> = PassManager::create(());
+        pass_manager.add_promote_memory_to_register_pass();
         pass_manager.add_basic_alias_analysis_pass();
         pass_manager.add_instruction_combining_pass();
         pass_manager.add_reassociate_pass();
