@@ -457,10 +457,6 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             )
             .ok_or("Source location not found")?;
 
-        self.builder
-            .addi(RV32IReg::Sp, RV32IReg::Sp, -4)
-            .sw(RV32IReg::T0, 0, RV32IReg::Sp);
-
         match src_loc {
             Location::Global(name) => {
                 self.builder
@@ -468,8 +464,7 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                     .lw(RV32IReg::T0, 0, RV32IReg::T0);
             }
             Location::Stack(offset) => {
-                self.builder
-                    .lw(RV32IReg::T0, offset as i32 + 4, RV32IReg::Sp);
+                self.builder.lw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
             }
             Location::Reg(reg) => {
                 self.builder.lw(RV32IReg::T0, 0, reg);
@@ -484,8 +479,7 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                 self.builder.mv(reg, RV32IReg::T0);
             }
             Location::Stack(offset) => {
-                self.builder
-                    .sw(RV32IReg::T0, offset as i32 + 4, RV32IReg::Sp);
+                self.builder.sw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
             }
             Location::Global(name) => {
                 self.builder.la(RV32IReg::T1, &name);
@@ -495,10 +489,6 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                 return Err("Unsupported destination location for load".to_string());
             }
         }
-
-        self.builder
-            .lw(RV32IReg::T0, 0, RV32IReg::Sp)
-            .addi(RV32IReg::Sp, RV32IReg::Sp, 4);
 
         Ok(())
     }
@@ -525,17 +515,13 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                 .as_value_ref(),
         );
 
-        self.builder
-            .addi(RV32IReg::Sp, RV32IReg::Sp, -4)
-            .sw(RV32IReg::T0, 0, RV32IReg::Sp);
         match src_loc {
             Some(loc) => match loc {
                 Location::Reg(reg) => {
                     self.builder.mv(RV32IReg::T0, reg);
                 }
                 Location::Stack(offset) => {
-                    self.builder
-                        .lw(RV32IReg::T0, offset as i32 + 4, RV32IReg::Sp);
+                    self.builder.lw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
                 }
                 Location::Global(name) => {
                     self.builder.la(RV32IReg::T0, &name);
@@ -563,8 +549,7 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                     self.builder.sw(RV32IReg::T0, 0, reg);
                 }
                 Location::Stack(offset) => {
-                    self.builder
-                        .sw(RV32IReg::T0, offset as i32 + 4, RV32IReg::Sp);
+                    self.builder.sw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
                 }
                 Location::Global(name) => {
                     self.builder.la(RV32IReg::T1, &name);
@@ -586,10 +571,6 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                 self.builder.sw(RV32IReg::T0, 0, RV32IReg::T1);
             }
         }
-
-        self.builder
-            .lw(RV32IReg::T0, 0, RV32IReg::Sp)
-            .addi(RV32IReg::Sp, RV32IReg::Sp, 4);
 
         Ok(())
     }
@@ -639,18 +620,13 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                 .as_value_ref(),
         );
 
-        self.builder
-            .addi(RV32IReg::Sp, RV32IReg::Sp, -8)
-            .sw(RV32IReg::T0, -4, RV32IReg::Sp)
-            .sw(RV32IReg::T1, 0, RV32IReg::Sp);
         match lhs_loc {
             Some(loc) => match loc {
                 Location::Reg(reg) => {
                     self.builder.mv(RV32IReg::T0, reg);
                 }
                 Location::Stack(offset) => {
-                    self.builder
-                        .lw(RV32IReg::T0, offset as i32 + 8, RV32IReg::Sp);
+                    self.builder.lw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
                 }
                 Location::Global(name) => {
                     self.builder.la(RV32IReg::T0, &name);
@@ -677,8 +653,7 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                     self.builder.mv(RV32IReg::T1, reg);
                 }
                 Location::Stack(offset) => {
-                    self.builder
-                        .lw(RV32IReg::T1, offset as i32 + 8, RV32IReg::Sp);
+                    self.builder.lw(RV32IReg::T1, offset as i32, RV32IReg::Sp);
                 }
                 Location::Global(label) => {
                     self.builder.la(RV32IReg::T1, &label);
@@ -746,16 +721,13 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                 self.builder.mv(reg, RV32IReg::T0);
             }
             Location::Stack(offset) => {
-                self.builder
-                    .sw(RV32IReg::T0, offset as i32 + 8, RV32IReg::Sp);
+                self.builder.sw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
             }
             Location::Global(label) => {
                 self.builder.la(RV32IReg::T1, &label);
                 self.builder.sw(RV32IReg::T0, 0, RV32IReg::T1);
             }
         }
-
-        self.builder.addi(RV32IReg::Sp, RV32IReg::Sp, 8);
 
         Ok(())
     }
