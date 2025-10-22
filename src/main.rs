@@ -5,9 +5,9 @@ mod semantic;
 
 mod codegen;
 
+use crate::codegen::asm::RV32IASMGenerator;
 use crate::codegen::ir::LLVMIRGenerator;
 use crate::codegen::regs::NoneRegisterAllocator;
-use crate::codegen::{asm::RV32IASMGenerator, regs::LinearScanRegisterAllocator};
 use inkwell::context::Context;
 
 use crate::parser::parse;
@@ -32,7 +32,7 @@ fn main() {
         .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
     llvm_ir_gen.optimize();
 
-    let mut asm_gen: RV32IASMGenerator<LinearScanRegisterAllocator> =
+    let mut asm_gen: RV32IASMGenerator<NoneRegisterAllocator> =
         RV32IASMGenerator::new(llvm_ir_gen, "main");
     asm_gen
         .gen_asm()

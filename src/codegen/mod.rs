@@ -17,7 +17,7 @@ use crate::parser::parse;
 
 use crate::codegen::asm::RV32IASMGenerator;
 use crate::codegen::ir::LLVMIRGenerator;
-use crate::codegen::regs::LinearScanRegisterAllocator;
+// use crate::codegen::regs::LinearScanRegisterAllocator;
 use crate::codegen::regs::NoneRegisterAllocator;
 use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
