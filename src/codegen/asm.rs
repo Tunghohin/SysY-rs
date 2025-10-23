@@ -313,7 +313,7 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             allocator: allocator,
             entry,
         };
-        ret.ir_module.optimize();
+        // ret.ir_module.optimize();
         ret
     }
 

@@ -1,9 +1,0 @@
-int x = 777;
-int main() {
-    int y, z;
-
-    y = x * 8;
-    z = x / 8;
-
-    return y + z;
-}
