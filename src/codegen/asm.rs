@@ -4,8 +4,10 @@ use crate::codegen::ir::LLVMIRGenerator;
 use crate::codegen::regs::{Location, NoneRegisterAllocator, RV32IReg, RegisterAllocator};
 use inkwell::builder;
 use inkwell::context::Context;
+use inkwell::llvm_sys::prelude::LLVMValueRef;
 use inkwell::module::Module;
 use inkwell::values::{AsValueRef, BasicValue, FunctionValue, InstructionOpcode, InstructionValue};
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug)]
 pub struct VarId(pub u32);
@@ -277,12 +279,21 @@ impl RV32IBuilder {
     }
 }
 
+#[derive(Clone)]
+struct PhiMove {
+    dest: Location,
+    src_value_ref: LLVMValueRef,
+    src_bb: String,
+}
+
 pub struct RV32IASMGenerator<'ctx, T: RegisterAllocator> {
     ir_module: LLVMIRGenerator<'ctx>,
     allocator: T,
     builder: RV32IBuilder,
     dyn_stack_offset: usize,
+    current_bb: Option<String>,
     entry: &'static str,
+    phi_moves: HashMap<String, Vec<PhiMove>>,
 }
 
 enum BinaryOperator {
@@ -314,8 +325,10 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             allocator: allocator,
             entry,
             dyn_stack_offset: 0,
+            current_bb: None,
+            phi_moves: HashMap::new(),
         };
-        // ret.ir_module.optimize();
+        ret.ir_module.optimize();
         ret
     }
 
@@ -350,13 +363,59 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
         Ok(())
     }
 
+    fn collect_phi_move(&mut self, phi_instr: &InstructionValue<'_>) -> Result<(), String> {
+        let dest_loc = self
+            .allocator
+            .get(&phi_instr.as_value_ref())
+            .ok_or("Destination location for phi instruction not found")?;
+        println!(
+            "Collecting phi moves for dest {:?} in instruction {:?}",
+            dest_loc, phi_instr
+        );
+
+        let num_incomming = phi_instr.get_num_operands();
+        for i in 0..num_incomming {
+            let operand = phi_instr
+                .get_operand(i)
+                .ok_or("Phi instruction missing operand")?;
+            let src_value = operand
+                .left()
+                .ok_or("Invalid source operand in phi instruction")?;
+            let src_bb = operand
+                .right()
+                .ok_or("Invalid source basic block in phi instruction")?;
+
+            let src_bb_name = src_bb.get_name().to_str().map_err(|e| e.to_string())?;
+
+            self.phi_moves
+                .entry(src_bb_name.to_string())
+                .or_insert_with(Vec::new)
+                .push(PhiMove {
+                    dest: dest_loc.clone(),
+                    src_value_ref: src_value.as_value_ref(),
+                    src_bb: src_bb_name.to_string(),
+                });
+        }
+
+        Ok(())
+    }
+
     fn gen_function(&mut self, func: &'_ FunctionValue<'_>) -> Result<(), String> {
         let name = func.get_name().to_str().map_err(|e| e.to_string())?;
         self.builder.text_section().globl(name).tag(name);
         self.allocator.alloc(func)?;
         self.gen_prologue(self.allocator.stack_size_required())?;
 
+        func.get_basic_blocks().iter().for_each(|bb| {
+            bb.get_instructions()
+                .filter(|inst| inst.get_opcode() == InstructionOpcode::Phi)
+                .for_each(|phi_inst| {
+                    self.collect_phi_move(&phi_inst).unwrap();
+                })
+        });
+
         for bb in func.get_basic_blocks() {
+            self.current_bb = bb.get_name().to_str().ok().map(|s| s.to_string());
             self.builder
                 .tag(bb.get_name().to_str().map_err(|e| e.to_string())?);
             for instr in bb.get_instructions() {
@@ -379,6 +438,7 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                     InstructionOpcode::ZExt => self.gen_ext(&instr, false)?,
                     InstructionOpcode::SExt => self.gen_ext(&instr, true)?,
                     InstructionOpcode::Alloca => self.gen_alloca(&instr)?,
+                    InstructionOpcode::Br => self.gen_br(&instr)?,
                     _ => {}
                 }
             }
@@ -386,6 +446,149 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
 
         Ok(())
     }
+
+    fn gen_phi_move(&mut self, phi_move: &PhiMove) -> Result<(), String> {
+        match self.allocator.get(&phi_move.src_value_ref) {
+            Some(loc) => match loc {
+                Location::Reg(reg) => {
+                    self.builder.mv(RV32IReg::T2, reg);
+                }
+                Location::Stack(offset) => {
+                    self.builder.lw(
+                        RV32IReg::T2,
+                        (offset + self.dyn_stack_offset) as i32,
+                        RV32IReg::Sp,
+                    );
+                }
+                Location::Global(name) => {
+                    self.builder.la(RV32IReg::T2, &name);
+                    self.builder.lw(RV32IReg::T2, 0, RV32IReg::T2);
+                }
+            },
+            None => {
+                let const_val =
+                    unsafe { inkwell::values::BasicValueEnum::new(phi_move.src_value_ref) };
+                if let Some(int_val) = const_val.as_instruction_value() {
+                    return Err("Phi source should not be instruction".to_string());
+                }
+                let int_const = const_val
+                    .into_int_value()
+                    .get_zero_extended_constant()
+                    .ok_or("Phi source is not a valid constant")?
+                    as i32;
+                self.builder.li(RV32IReg::T2, int_const);
+            }
+        }
+
+        // 存储到目标位置
+        match &phi_move.dest {
+            Location::Reg(reg) => {
+                self.builder.mv(*reg, RV32IReg::T2);
+            }
+            Location::Stack(offset) => {
+                self.builder.sw(
+                    RV32IReg::T2,
+                    (*offset + self.dyn_stack_offset) as i32,
+                    RV32IReg::Sp,
+                );
+            }
+            Location::Global(name) => {
+                self.builder.la(RV32IReg::T3, name);
+                self.builder.sw(RV32IReg::T2, 0, RV32IReg::T3);
+            }
+        }
+
+        Ok(())
+    }
+
+    // 修改：gen_br 方法
+    fn gen_br(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
+        match instr.get_num_operands() {
+            1 => {
+                let dest_bb = instr
+                    .get_operand(0)
+                    .ok_or("Branch instruction missing destination")?
+                    .right()
+                    .ok_or("Invalid destination operand")?;
+
+                let dest_bb_name = dest_bb.get_name().to_str().map_err(|e| e.to_string())?;
+            }
+
+            3 => {
+                // 条件跳转
+                let cond = instr
+                    .get_operand(0)
+                    .ok_or("Branch instruction missing condition")?
+                    .left()
+                    .ok_or("Invalid condition operand")?;
+                let true_dest_bb = instr
+                    .get_operand(2)
+                    .ok_or("Branch instruction missing true destination")?
+                    .right()
+                    .ok_or("Invalid true destination operand")?;
+                let false_dest_bb = instr
+                    .get_operand(1)
+                    .ok_or("Branch instruction missing false destination")?
+                    .right()
+                    .ok_or("Invalid false destination operand")?;
+
+                let true_bb_name = true_dest_bb
+                    .get_name()
+                    .to_str()
+                    .map_err(|e| e.to_string())?;
+                let false_bb_name = false_dest_bb
+                    .get_name()
+                    .to_str()
+                    .map_err(|e| e.to_string())?;
+
+                let cond_loc = self
+                    .allocator
+                    .get(&cond.as_value_ref())
+                    .ok_or("Condition location not found")?;
+            }
+
+            _ => return Err("Unsupported number of operands for br instruction".to_string()),
+        }
+        Ok(())
+    }
+
+    // fn gen_br(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
+    //     match instr.get_num_operands() {
+    //         1 => {
+    //             let dest_bb = instr
+    //                 .get_operand(0)
+    //                 .ok_or("Branch instruction missing destination")?
+    //                 .right()
+    //                 .ok_or("Invalid destination operand")?;
+    //         }
+
+    //         3 => {
+    //             let cond = instr
+    //                 .get_operand(0)
+    //                 .ok_or("Branch instruction missing condition")?
+    //                 .left()
+    //                 .ok_or("Invalid condition operand")?;
+    //             let true_dest_bb = instr
+    //                 .get_operand(1)
+    //                 .ok_or("Branch instruction missing true destination")?
+    //                 .right()
+    //                 .ok_or("Invalid true destination operand")?;
+    //             let false_dest_bb = instr
+    //                 .get_operand(2)
+    //                 .ok_or("Branch instruction missing false destination")?
+    //                 .right()
+    //                 .ok_or("Invalid false destination operand")?;
+
+    //             let cond_loc = self
+    //                 .allocator
+    //                 .get(&cond.as_value_ref())
+    //                 .ok_or("Condition location not found")?;
+    //         }
+
+    //         _ => return Err("Unsupported number of operands for br instruction".to_string()),
+    //     }
+    //     Ok(())
+    // }
 
     fn gen_alloca(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
         let dst_loc = self

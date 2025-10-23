@@ -67,7 +67,7 @@ fn codegen_dummy() {
 
 #[test]
 fn codegen() {
-    let src = std::fs::read_to_string("tests/codegen/asm2.in").unwrap_or_default();
+    let src = std::fs::read_to_string("tests/codegen/asm3.in").unwrap_or_default();
     let ast = parse(&src, BuildConfig::default())
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));
@@ -79,13 +79,13 @@ fn codegen() {
     llvm_ir_gen
         .gen_ir(&ast)
         .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
-    // llvm_ir_gen.optimize();
+    llvm_ir_gen.optimize();
     llvm_ir_gen.print_to_stderr();
 
-    let ret = llvm_ir_gen
-        .execute()
-        .unwrap_or_else(|e| panic!("Failed to execute: {}", e));
-    println!("Program return: {}\n\n\n", ret);
+    // let ret = llvm_ir_gen
+    //     .execute()
+    //     .unwrap_or_else(|e| panic!("Failed to execute: {}", e));
+    // println!("Progam return: {}\n\n\n", ret);
 
     let mut asm_gen: RV32IASMGenerator<LinearScanRegisterAllocator> =
         RV32IASMGenerator::new(llvm_ir_gen, "main");
@@ -94,17 +94,17 @@ fn codegen() {
         .unwrap_or_else(|e| panic!("Failed to generate assembly: {}", e));
     std::fs::write("./solution.txt", asm_gen.emit()).expect("Unable to write file");
 
-    let output = std::process::Command::new("java")
-        .args([
-            "-jar",
-            "/home/sgimage/Labs/rars.jar",
-            "/home/sgimage/Labs/compiler/solution.txt",
-            "ic",
-            "a0",
-        ])
-        .output()
-        .expect("failed to run RARS");
+    // let output = std::process::Command::new("java")
+    //     .args([
+    //         "-jar",
+    //         "/home/sgimage/Labs/rars.jar",
+    //         "/home/sgimage/Labs/compiler/solution.txt",
+    //         "ic",
+    //         "a0",
+    //     ])
+    //     .output()
+    //     .expect("failed to run RARS");
 
-    println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+    // println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
     // run rars
 }

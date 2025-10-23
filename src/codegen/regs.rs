@@ -286,7 +286,6 @@ pub struct LinearScanRegisterAllocator {
 impl LinearScanRegisterAllocator {
     fn get_allocatable_regs() -> Vec<RV32IReg> {
         vec![
-            RV32IReg::T2,
             RV32IReg::T3,
             RV32IReg::T4,
             RV32IReg::T5,
