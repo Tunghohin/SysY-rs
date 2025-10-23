@@ -282,6 +282,7 @@ pub struct RV32IASMGenerator<'ctx, T: RegisterAllocator> {
     allocator: T,
     builder: RV32IBuilder,
     entry: &'static str,
+    stack_offset: usize,
 }
 
 enum Operator {
@@ -306,24 +307,29 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             builder: RV32IBuilder::new(),
             allocator: allocator,
             entry,
+            stack_offset: 0,
         };
         ret.ir_module.optimize();
         ret
     }
 
+    fn stack_offset(&self) -> usize {
+        self.stack_offset
+    }
+
     fn gen_global_vars(&mut self) -> Result<(), String> {
         for global_var in self.ir_module.module().get_globals() {
-            let name = global_var.get_name().to_str().map_err(|e| e.to_string())?;
-            let init_val = global_var
-                .get_initializer()
-                .unwrap()
-                .into_int_value()
-                .get_zero_extended_constant()
-                .unwrap() as i32;
             self.builder
                 .data_section()
-                .tag(name)
-                .word(init_val)
+                .tag(global_var.get_name().to_str().map_err(|e| e.to_string())?)
+                .word(
+                    global_var
+                        .get_initializer()
+                        .unwrap()
+                        .into_int_value()
+                        .get_zero_extended_constant()
+                        .unwrap() as i32,
+                )
                 .newline();
         }
         Ok(())
@@ -334,9 +340,11 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
     }
 
     fn gen_prologue(&mut self, stack_size: usize) -> Result<(), String> {
-        self.builder
-            .li(RV32IReg::T0, -(Self::stack_size_align16(stack_size) as i32))
-            .add(RV32IReg::Sp, RV32IReg::Sp, RV32IReg::T0);
+        self.builder.li(RV32IReg::T0, -(stack_size as i32)).add(
+            RV32IReg::Sp,
+            RV32IReg::Sp,
+            RV32IReg::T0,
+        );
         Ok(())
     }
 
@@ -360,80 +368,11 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                     InstructionOpcode::SDiv => self.gen_binary(&instr, Operator::Div)?,
                     InstructionOpcode::SRem => self.gen_binary(&instr, Operator::SRem)?,
                     InstructionOpcode::ICmp => self.gen_icmp(&instr)?,
-                    InstructionOpcode::Br => self.gen_br(&instr)?,
-                    InstructionOpcode::Phi => self.gen_phi(&instr)?,
                     _ => {}
                 }
             }
         }
-        Ok(())
-    }
 
-    fn gen_phi(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn gen_br(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
-        let num_operands = instr.get_num_operands();
-        match num_operands {
-            1 => {}
-            3 => {
-                let cond = instr
-                    .get_operand(0)
-                    .ok_or("Branch instruction missing condition operand")?
-                    .left()
-                    .ok_or("Invalid condition operand")?
-                    .as_value_ref();
-
-                let cond_loc = self
-                    .allocator
-                    .get(&cond)
-                    .ok_or("Condition location not found")?;
-
-                let true_bb_val = instr
-                    .get_operand(1)
-                    .ok_or("Branch instruction missing true target operand")?
-                    .right()
-                    .ok_or("Invalid true target operand")?;
-
-                let true_bb = true_bb_val.get_name().to_str().map_err(|e| e.to_string())?;
-
-                let false_bb_val = instr
-                    .get_operand(2)
-                    .ok_or("Branch instruction missing false target operand")?
-                    .right()
-                    .ok_or("Invalid false target operand")?;
-
-                let false_bb = false_bb_val
-                    .get_name()
-                    .to_str()
-                    .map_err(|e| e.to_string())?;
-
-                match cond_loc {
-                    Location::Reg(reg) => {
-                        self.builder.beq(reg, RV32IReg::Zero, false_bb);
-                        self.builder.tail(true_bb);
-                    }
-                    Location::Stack(offset) => {
-                        self.builder.lw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
-                        self.builder.beq(RV32IReg::T0, RV32IReg::Zero, false_bb);
-                        self.builder.tail(true_bb);
-                    }
-                    Location::Global(name) => {
-                        self.builder.la(RV32IReg::T0, &name);
-                        self.builder.lw(RV32IReg::T0, 0, RV32IReg::T0);
-                        self.builder.beq(RV32IReg::T0, RV32IReg::Zero, false_bb);
-                        self.builder.tail(true_bb);
-                    }
-                    _ => {
-                        return Err("Unsupported condition location for branch".to_string());
-                    }
-                }
-            }
-            _ => {
-                return Err("Unsupported number of operands for branch instruction".to_string());
-            }
-        }
         Ok(())
     }
 
@@ -458,19 +397,16 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             .ok_or("Source location not found")?;
 
         match src_loc {
-            Location::Global(name) => {
-                self.builder
-                    .la(RV32IReg::T0, &name)
-                    .lw(RV32IReg::T0, 0, RV32IReg::T0);
+            Location::Reg(reg) => {
+                self.builder.lw(RV32IReg::T0, 0, reg);
             }
             Location::Stack(offset) => {
                 self.builder.lw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
             }
-            Location::Reg(reg) => {
-                self.builder.lw(RV32IReg::T0, 0, reg);
-            }
-            _ => {
-                return Err("Unsupported source location for load".to_string());
+            Location::Global(name) => {
+                self.builder
+                    .la(RV32IReg::T0, &name)
+                    .lw(RV32IReg::T0, 0, RV32IReg::T0);
             }
         }
 
@@ -484,9 +420,6 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             Location::Global(name) => {
                 self.builder.la(RV32IReg::T1, &name);
                 self.builder.sw(RV32IReg::T0, 0, RV32IReg::T1);
-            }
-            _ => {
-                return Err("Unsupported destination location for load".to_string());
             }
         }
 
@@ -506,14 +439,17 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                 .ok_or("Invalid value operand")?
                 .as_value_ref(),
         );
-        let dst_loc = self.allocator.get(
-            &instr
-                .get_operand(1)
-                .ok_or("Store instruction missing address operand")?
-                .left()
-                .ok_or("Invalid address operand")?
-                .as_value_ref(),
-        );
+        let dst_loc = self
+            .allocator
+            .get(
+                &instr
+                    .get_operand(1)
+                    .ok_or("Store instruction missing address operand")?
+                    .left()
+                    .ok_or("Invalid address operand")?
+                    .as_value_ref(),
+            )
+            .unwrap();
 
         match src_loc {
             Some(loc) => match loc {
@@ -544,30 +480,14 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
         }
 
         match dst_loc {
-            Some(loc) => match loc {
-                Location::Reg(reg) => {
-                    self.builder.sw(RV32IReg::T0, 0, reg);
-                }
-                Location::Stack(offset) => {
-                    self.builder.sw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
-                }
-                Location::Global(name) => {
-                    self.builder.la(RV32IReg::T1, &name);
-                    self.builder.sw(RV32IReg::T0, 0, RV32IReg::T1);
-                }
-            },
-            None => {
-                self.builder.li(
-                    RV32IReg::T1,
-                    instr
-                        .get_operand(1)
-                        .ok_or("Missing address operand")?
-                        .left()
-                        .ok_or("Invalid address operand")?
-                        .into_int_value()
-                        .get_zero_extended_constant()
-                        .ok_or("Address is not a constant")? as i32,
-                );
+            Location::Reg(reg) => {
+                self.builder.sw(RV32IReg::T0, 0, reg);
+            }
+            Location::Stack(offset) => {
+                self.builder.sw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
+            }
+            Location::Global(name) => {
+                self.builder.la(RV32IReg::T1, &name);
                 self.builder.sw(RV32IReg::T0, 0, RV32IReg::T1);
             }
         }
@@ -695,13 +615,15 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                 self.builder.slt(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
             }
             Operator::Gt => {
-                self.builder.slt(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+                self.builder.slt(RV32IReg::T0, RV32IReg::T1, RV32IReg::T0);
             }
             Operator::Le => {
                 self.builder.slt(RV32IReg::T0, RV32IReg::T1, RV32IReg::T0);
+                self.builder.seqz(RV32IReg::T0, RV32IReg::T0);
             }
             Operator::Ge => {
                 self.builder.slt(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+                self.builder.seqz(RV32IReg::T0, RV32IReg::T0);
             }
             Operator::Eq => {
                 self.builder.xor(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
