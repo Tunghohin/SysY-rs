@@ -6,6 +6,7 @@ pub mod regs;
 pub mod scope;
 pub mod symbol_table;
 
+use crate::codegen::regs::LinearScanRegisterAllocator;
 use crate::parser;
 use crate::parser::BuildConfig;
 use crate::parser::PrimaryExpInner;
@@ -66,7 +67,7 @@ fn codegen_dummy() {
 
 #[test]
 fn codegen() {
-    let src = std::fs::read_to_string("tests/codegen/asm6.in").unwrap_or_default();
+    let src = std::fs::read_to_string("tests/codegen/asm2.in").unwrap_or_default();
     let ast = parse(&src, BuildConfig::default())
         .map_err(|e| println!("{}", e))
         .unwrap_or_else(|_| panic!("Failed to parse source code"));
@@ -86,7 +87,7 @@ fn codegen() {
         .unwrap_or_else(|e| panic!("Failed to execute: {}", e));
     println!("Program return: {}\n\n\n", ret);
 
-    let mut asm_gen: RV32IASMGenerator<NoneRegisterAllocator> =
+    let mut asm_gen: RV32IASMGenerator<LinearScanRegisterAllocator> =
         RV32IASMGenerator::new(llvm_ir_gen, "main");
     asm_gen
         .gen_asm()
