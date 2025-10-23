@@ -56,6 +56,9 @@ impl<'ctx> LLVMIRGenerator<'ctx> {
         pass_manager.add_promote_memory_to_register_pass();
         pass_manager.add_basic_alias_analysis_pass();
         pass_manager.add_instruction_combining_pass();
+        pass_manager.add_reassociate_pass();
+        pass_manager.add_gvn_pass();
+        pass_manager.add_cfg_simplification_pass();
         pass_manager.add_instruction_combining_pass();
 
         pass_manager.run_on(&self.module);

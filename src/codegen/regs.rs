@@ -149,3 +149,54 @@ impl<'ctx> RegisterAllocator for NoneRegisterAllocator {
             .cloned()
     }
 }
+
+pub struct LinearScanRegisterAllocator {
+    global: HashMap<LLVMValueRef, Location>,
+    vreg_map: HashMap<LLVMValueRef, Location>,
+    stack_offset: usize,
+}
+
+impl<'ctx> RegisterAllocator for LinearScanRegisterAllocator {
+    fn new(module: &Module) -> Self {
+        let mut ret = Self {
+            global: HashMap::new(),
+            vreg_map: HashMap::new(),
+            stack_offset: 0,
+        };
+        module.get_globals().for_each(|global| {
+            ret.global.insert(
+                global.as_value_ref(),
+                Location::Global(global.get_name().to_str().unwrap_or_default().to_string()),
+            );
+        });
+        ret
+    }
+
+    fn stack_size_required(&self) -> usize {
+        // align to 16 bytes
+        (self.stack_offset + 15) & !15
+    }
+
+    fn alloc(&mut self, func: &FunctionValue) -> Result<(), String> {
+        self.vreg_map.clear();
+        self.stack_offset = 0;
+        func.get_basic_block_iter()
+            .flat_map(|bb| bb.get_instructions())
+            .for_each(|inst| {
+                if !inst.get_type().is_void_type() {
+                    self.vreg_map
+                        .insert(inst.as_value_ref(), Location::Stack(self.stack_offset));
+                    self.stack_offset += 4;
+                }
+            });
+
+        Ok(())
+    }
+
+    fn get(&self, val_ref: &LLVMValueRef) -> Option<Location> {
+        self.vreg_map
+            .get(val_ref)
+            .or_else(|| self.global.get(val_ref))
+            .cloned()
+    }
+}
