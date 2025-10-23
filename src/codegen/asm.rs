@@ -282,7 +282,6 @@ pub struct RV32IASMGenerator<'ctx, T: RegisterAllocator> {
     allocator: T,
     builder: RV32IBuilder,
     entry: &'static str,
-    stack_offset: usize,
 }
 
 enum Operator {
@@ -307,14 +306,9 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             builder: RV32IBuilder::new(),
             allocator: allocator,
             entry,
-            stack_offset: 0,
         };
-        ret.ir_module.optimize();
+        // ret.ir_module.optimize();
         ret
-    }
-
-    fn stack_offset(&self) -> usize {
-        self.stack_offset
     }
 
     fn gen_global_vars(&mut self) -> Result<(), String> {
@@ -368,8 +362,71 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                     InstructionOpcode::SDiv => self.gen_binary(&instr, Operator::Div)?,
                     InstructionOpcode::SRem => self.gen_binary(&instr, Operator::SRem)?,
                     InstructionOpcode::ICmp => self.gen_icmp(&instr)?,
+                    InstructionOpcode::ZExt => self.gen_zext(&instr)?,
                     _ => {}
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn gen_zext(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
+        if instr.get_num_operands() != 1 {
+            return Err("ZExt instruction must have 1 operand".to_string());
+        }
+
+        let dest_loc = self
+            .allocator
+            .get(&instr.as_value_ref())
+            .ok_or("Destination location not found")?;
+        let src_loc = self.allocator.get(
+            &instr
+                .get_operand(0)
+                .ok_or("ZExt instruction missing source operand")?
+                .left()
+                .ok_or("Invalid source operand")?
+                .as_value_ref(),
+        );
+
+        match src_loc {
+            Some(loc) => match loc {
+                Location::Reg(reg) => {
+                    self.builder.mv(RV32IReg::T0, reg);
+                }
+                Location::Stack(offset) => {
+                    self.builder.lw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
+                }
+                Location::Global(name) => {
+                    self.builder.la(RV32IReg::T0, &name);
+                    self.builder.lw(RV32IReg::T0, 0, RV32IReg::T0);
+                }
+            },
+            None => {
+                self.builder.li(
+                    RV32IReg::T0,
+                    instr
+                        .get_operand(0)
+                        .ok_or("Missing source operand")?
+                        .left()
+                        .ok_or("Invalid source operand")?
+                        .into_int_value()
+                        .get_zero_extended_constant()
+                        .ok_or("Source is not a constant")? as i32,
+                );
+            }
+        }
+
+        match dest_loc {
+            Location::Reg(reg) => {
+                self.builder.mv(reg, RV32IReg::T0);
+            }
+            Location::Stack(offset) => {
+                self.builder.sw(RV32IReg::T0, offset as i32, RV32IReg::Sp);
+            }
+            Location::Global(name) => {
+                self.builder.la(RV32IReg::T1, &name);
+                self.builder.sw(RV32IReg::T0, 0, RV32IReg::T1);
             }
         }
 

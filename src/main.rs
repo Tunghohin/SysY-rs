@@ -30,7 +30,7 @@ fn main() {
     llvm_ir_gen
         .gen_ir(&ast)
         .unwrap_or_else(|e| panic!("Failed to generate LLVM IR: {}", e));
-    llvm_ir_gen.optimize();
+    // llvm_ir_gen.optimize();
 
     let mut asm_gen: RV32IASMGenerator<NoneRegisterAllocator> =
         RV32IASMGenerator::new(llvm_ir_gen, "main");
