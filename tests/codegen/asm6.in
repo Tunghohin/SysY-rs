@@ -1,7 +1,9 @@
-int N = 233;
-int M = 466;
-
+int x = 777;
 int main() {
-    N = M >= N;
-    return N;
+    int y, z;
+
+    y = x * 8;
+    z = x / 8;
+
+    return y + z;
 }

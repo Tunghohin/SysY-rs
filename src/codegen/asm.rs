@@ -284,7 +284,7 @@ pub struct RV32IASMGenerator<'ctx, T: RegisterAllocator> {
     entry: &'static str,
 }
 
-enum Operator {
+enum BinaryOperator {
     Add,
     Sub,
     Mul,
@@ -296,6 +296,12 @@ enum Operator {
     Ge,
     Eq,
     Ne,
+    And,
+    Or,
+    Xor,
+    Ashr,
+    Lshr,
+    Shl,
 }
 
 impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
@@ -356,13 +362,20 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
                     InstructionOpcode::Return => self.gen_return(&instr, name == self.entry)?,
                     InstructionOpcode::Load => self.gen_load(&instr)?,
                     InstructionOpcode::Store => self.gen_store(&instr)?,
-                    InstructionOpcode::Add => self.gen_binary(&instr, Operator::Add)?,
-                    InstructionOpcode::Sub => self.gen_binary(&instr, Operator::Sub)?,
-                    InstructionOpcode::Mul => self.gen_binary(&instr, Operator::Mul)?,
-                    InstructionOpcode::SDiv => self.gen_binary(&instr, Operator::Div)?,
-                    InstructionOpcode::SRem => self.gen_binary(&instr, Operator::SRem)?,
+                    InstructionOpcode::Add => self.gen_binary(&instr, BinaryOperator::Add)?,
+                    InstructionOpcode::Sub => self.gen_binary(&instr, BinaryOperator::Sub)?,
+                    InstructionOpcode::Mul => self.gen_binary(&instr, BinaryOperator::Mul)?,
+                    InstructionOpcode::SDiv => self.gen_binary(&instr, BinaryOperator::Div)?,
+                    InstructionOpcode::SRem => self.gen_binary(&instr, BinaryOperator::SRem)?,
+                    InstructionOpcode::And => self.gen_binary(&instr, BinaryOperator::And)?,
+                    InstructionOpcode::Or => self.gen_binary(&instr, BinaryOperator::Or)?,
+                    InstructionOpcode::Xor => self.gen_binary(&instr, BinaryOperator::Xor)?,
+                    InstructionOpcode::AShr => self.gen_binary(&instr, BinaryOperator::Ashr)?,
+                    InstructionOpcode::LShr => self.gen_binary(&instr, BinaryOperator::Lshr)?,
+                    InstructionOpcode::Shl => self.gen_binary(&instr, BinaryOperator::Shl)?,
                     InstructionOpcode::ICmp => self.gen_icmp(&instr)?,
-                    InstructionOpcode::ZExt => self.gen_zext(&instr)?,
+                    InstructionOpcode::ZExt => self.gen_ext(&instr, false)?,
+                    InstructionOpcode::SExt => self.gen_ext(&instr, true)?,
                     _ => {}
                 }
             }
@@ -371,7 +384,7 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
         Ok(())
     }
 
-    fn gen_zext(&mut self, instr: &InstructionValue<'_>) -> Result<(), String> {
+    fn gen_ext(&mut self, instr: &InstructionValue<'_>, is_signed: bool) -> Result<(), String> {
         if instr.get_num_operands() != 1 {
             return Err("ZExt instruction must have 1 operand".to_string());
         }
@@ -405,14 +418,25 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
             None => {
                 self.builder.li(
                     RV32IReg::T0,
-                    instr
-                        .get_operand(0)
-                        .ok_or("Missing source operand")?
-                        .left()
-                        .ok_or("Invalid source operand")?
-                        .into_int_value()
-                        .get_zero_extended_constant()
-                        .ok_or("Source is not a constant")? as i32,
+                    if is_signed {
+                        instr
+                            .get_operand(0)
+                            .ok_or("Missing source operand")?
+                            .left()
+                            .ok_or("Invalid source operand")?
+                            .into_int_value()
+                            .get_sign_extended_constant()
+                            .ok_or("Source is not a constant")? as i32
+                    } else {
+                        instr
+                            .get_operand(0)
+                            .ok_or("Missing source operand")?
+                            .left()
+                            .ok_or("Invalid source operand")?
+                            .into_int_value()
+                            .get_zero_extended_constant()
+                            .ok_or("Source is not a constant")? as i32
+                    },
                 );
             }
         }
@@ -559,19 +583,23 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
 
         let predicate = instr.get_icmp_predicate().ok_or("Missing ICmp predicate")?;
         let predicate = match predicate {
-            inkwell::IntPredicate::EQ => Operator::Eq,
-            inkwell::IntPredicate::NE => Operator::Ne,
-            inkwell::IntPredicate::SLT => Operator::Lt,
-            inkwell::IntPredicate::SGT => Operator::Gt,
-            inkwell::IntPredicate::SLE => Operator::Le,
-            inkwell::IntPredicate::SGE => Operator::Ge,
+            inkwell::IntPredicate::EQ => BinaryOperator::Eq,
+            inkwell::IntPredicate::NE => BinaryOperator::Ne,
+            inkwell::IntPredicate::SLT => BinaryOperator::Lt,
+            inkwell::IntPredicate::SGT => BinaryOperator::Gt,
+            inkwell::IntPredicate::SLE => BinaryOperator::Le,
+            inkwell::IntPredicate::SGE => BinaryOperator::Ge,
             _ => return Err("Unsupported ICmp predicate".to_string()),
         };
 
         self.gen_binary(instr, predicate)
     }
 
-    fn gen_binary(&mut self, instr: &InstructionValue<'_>, op: Operator) -> Result<(), String> {
+    fn gen_binary(
+        &mut self,
+        instr: &InstructionValue<'_>,
+        op: BinaryOperator,
+    ) -> Result<(), String> {
         if instr.get_num_operands() != 2 {
             return Err("Binary instruction must have 2 operands".to_string());
         }
@@ -653,45 +681,60 @@ impl<'ctx, T: RegisterAllocator> RV32IASMGenerator<'ctx, T> {
         }
 
         match op {
-            Operator::Add => {
+            BinaryOperator::Add => {
                 self.builder.add(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
             }
-            Operator::Sub => {
+            BinaryOperator::Sub => {
                 self.builder.sub(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
             }
-            Operator::Mul => {
+            BinaryOperator::Mul => {
                 self.builder.mul(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
             }
-            Operator::Div => {
+            BinaryOperator::Div => {
                 self.builder.div(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
             }
-            Operator::SRem => {
+            BinaryOperator::SRem => {
                 self.builder.rem(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
             }
-            Operator::Lt => {
+            BinaryOperator::Lt => {
                 self.builder.slt(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
             }
-            Operator::Gt => {
+            BinaryOperator::Gt => {
                 self.builder.slt(RV32IReg::T0, RV32IReg::T1, RV32IReg::T0);
             }
-            Operator::Le => {
+            BinaryOperator::Le => {
                 self.builder.slt(RV32IReg::T0, RV32IReg::T1, RV32IReg::T0);
                 self.builder.seqz(RV32IReg::T0, RV32IReg::T0);
             }
-            Operator::Ge => {
+            BinaryOperator::Ge => {
                 self.builder.slt(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
                 self.builder.seqz(RV32IReg::T0, RV32IReg::T0);
             }
-            Operator::Eq => {
+            BinaryOperator::Eq => {
                 self.builder.xor(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
                 self.builder.seqz(RV32IReg::T0, RV32IReg::T0);
             }
-            Operator::Ne => {
+            BinaryOperator::Ne => {
                 self.builder.xor(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
                 self.builder.snez(RV32IReg::T0, RV32IReg::T0);
             }
-            _ => {
-                return Err("Unsupported binary operator".to_string());
+            BinaryOperator::And => {
+                self.builder.and(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+            }
+            BinaryOperator::Or => {
+                self.builder.or(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+            }
+            BinaryOperator::Xor => {
+                self.builder.xor(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+            }
+            BinaryOperator::Ashr => {
+                self.builder.sra(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+            }
+            BinaryOperator::Lshr => {
+                self.builder.srl(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
+            }
+            BinaryOperator::Shl => {
+                self.builder.sll(RV32IReg::T0, RV32IReg::T0, RV32IReg::T1);
             }
         }
 
